@@ -34,9 +34,22 @@ communitystore/
 
 The `mirthVersion` in `plugin.xml` must match your engine version (comma-separated values are accepted by the engine's compatibility check).
 
+## Continuous integration & releases
+
+Two GitHub Actions workflows build the extension without a local OIE install — they download a published OIE distribution and point `OIE_HOME` at its `server-lib` jars:
+
+* **`build.yml`** runs on every push and PR: compiles the jar, builds the frontend, runs the web-plugin tests, and uploads the extension zip as an artifact.
+* **`release.yml`** runs on a semver tag (`v*`): it stamps the tag version into the pom, `plugin.xml` (`pluginVersion`), and `webadmin/plugin.json`, verifies `oie.json` matches, builds, and publishes `communitystore-<version>.zip` plus its `.sha256` sidecar.
+
+The OIE version supplying the compile-time jars is pinned via the `OIE_TAG` / `OIE_TARBALL` env vars at the top of each workflow; bump them when the engine API you build against moves.
+
+To cut a release: set `version` in `oie.json` to the new value (keep it in sync with the pom), commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`. Stamping the version into `plugin.xml` matters — the engine reports that as the *installed* version, so if it lagged `oie.json` the store would show a perpetual self-update.
+
 ## Installing
 
 Install `communitystore-<version>.zip` through Extensions in either administrator, restart the engine, and the Community Store appears in the web administrator navigation. The web half is served by the engine (`/api/webplugins/communitystore/...`), so it follows the engine it is installed on.
+
+The store lists its own repository as a source and ships an `oie.json`, so it is **self-updating**: once a newer release is published, the store flags it as an available update in the Installed tab (and installs it through the same verified flow as any other extension).
 
 ## Sources
 
