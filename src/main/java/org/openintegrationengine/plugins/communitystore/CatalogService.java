@@ -250,8 +250,21 @@ public class CatalogService {
     private List<String> enumerateOrgRepos(String org, String topic) throws Exception {
         List<String> result = new ArrayList<>();
         String topicLower = topic == null ? "oie-plugin" : topic.toLowerCase();
+        // A listed name may be a GitHub organization OR a personal user account. Orgs list
+        // their repos under /orgs/{name}/repos, users under /users/{name}/repos; resolve which
+        // by the account type so topic-based discovery works for either. /users/{name} returns
+        // the profile for both kinds (type "Organization" or "User").
+        String reposBase = GitHubClient.API_BASE + "/orgs/" + org + "/repos";
+        try {
+            String type = gitHub.getApiJson(GitHubClient.API_BASE + "/users/" + org).path("type").asText("");
+            if (!"Organization".equalsIgnoreCase(type)) {
+                reposBase = GitHubClient.API_BASE + "/users/" + org + "/repos";
+            }
+        } catch (Exception ignore) {
+            // Couldn't resolve the account type — fall back to the org endpoint.
+        }
         for (int page = 1; result.size() < MAX_REPOS_PER_ORG; page++) {
-            JsonNode repos = gitHub.getApiJson(GitHubClient.API_BASE + "/orgs/" + org + "/repos?per_page=100&page=" + page);
+            JsonNode repos = gitHub.getApiJson(reposBase + "?per_page=100&page=" + page);
             if (!repos.isArray() || repos.isEmpty()) {
                 break;
             }

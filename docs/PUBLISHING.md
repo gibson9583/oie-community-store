@@ -205,11 +205,12 @@ See [`examples/store.md`](../examples/store.md).
 
 A repository becomes visible in the store in any of three ways:
 
-1. **Organization + topic (self-service).** If your repository lives in a GitHub
-   organization that is listed as an `org` source (the default list includes
-   `OpenIntegrationEngine`), simply add the **`oie-plugin`** topic to the repository
-   and cut a release. Org sources enumerate every public, non-archived repo carrying
-   the topic — no registry change needed. (Up to 300 repos per org are scanned.)
+1. **Account + topic (self-service).** If your repository lives under an account
+   listed as an `org` source — a GitHub **organization or a personal user account**
+   (the default list includes `OpenIntegrationEngine`) — simply add the
+   **`oie-plugin`** topic to the repository and cut a release. These sources
+   enumerate every public, non-archived repo under the account carrying the topic —
+   no registry change needed. (Up to 300 repos per account are scanned.)
 2. **Add your repo to the bundled source list.** Open a PR to this repository adding
    a `repo` entry to [`src/main/resources/sources.json`](../src/main/resources/sources.json):
    ```json

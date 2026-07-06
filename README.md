@@ -67,7 +67,7 @@ The bundled default source list lives at `src/main/resources/sources.json` and u
 ```
 
 * `repo` entries point at one repository.
-* `org` entries include every public repository in the organization that carries the topic (default `oie-plugin`). A publisher inside a listed org adds a plugin to the store by tagging the repository and cutting a release, with no registry change.
+* `org` entries include every public repository under an account that carries the topic (default `oie-plugin`). The account may be a GitHub **organization or a personal user** — the store resolves the account type and enumerates accordingly. A publisher under a listed account adds a plugin to the store by tagging the repository with the topic and cutting a release, with no registry change.
 
 Administrators can add custom sources and local blocklist entries at runtime in Settings; those persist on the engine. The bundled blocklist always applies.
 
