@@ -301,7 +301,10 @@ public class CatalogService {
     private List<ObjectNode> resolveRepo(String fullName, SemVer engine) throws Exception {
         JsonNode releases = gitHub.getApiJson(GitHubClient.API_BASE + "/repos/" + fullName + "/releases?per_page=" + RELEASES_PER_REPO);
         if (!releases.isArray() || releases.isEmpty()) {
-            return Collections.emptyList();
+            // No releases — fall back to the default branch. This lets content collections
+            // (channels / code templates, whose artifacts are raw repo files) publish with just
+            // a push, no tag. Extensions still need a release because they ship a built .zip.
+            return resolveFromDefaultBranch(fullName, engine);
         }
 
         String latestTag = null;
@@ -365,6 +368,28 @@ public class CatalogService {
             return Collections.singletonList(entry);
         }
         return Collections.emptyList();
+    }
+
+    /**
+     * Resolves a repository that has no releases from its default branch. Only collection
+     * manifests are honored (their artifacts are raw repo files, so the branch tip is enough);
+     * single-manifest extensions still require a release since they ship a built .zip asset.
+     * Content resolves from the branch tip, so it tracks the branch rather than a pinned tag.
+     */
+    private List<ObjectNode> resolveFromDefaultBranch(String fullName, SemVer engine) throws Exception {
+        JsonNode repo = gitHub.getApiJson(GitHubClient.API_BASE + "/repos/" + fullName);
+        String branch = repo.path("default_branch").asText("");
+        if (branch.isEmpty()) {
+            return Collections.emptyList();
+        }
+        JsonNode manifest = fetchManifest(fullName, branch);
+        if (manifest == null || !manifest.path("items").isArray()) {
+            return Collections.emptyList();
+        }
+        ObjectNode release = MAPPER.createObjectNode();
+        release.put("html_url", "https://github.com/" + fullName + "/tree/" + branch);
+        release.put("published_at", "");
+        return entriesFromCollection(fullName, branch, release, manifest, engine, branch);
     }
 
     /** Builds one catalog entry per item declared in a collection manifest. */
