@@ -50,15 +50,6 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Stamp the tag version everywhere the artifact reports it, so installed
-      # (plugin.xml) == offered (oie.json) and self-update detection is correct.
-      - name: Stamp version
-        run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
-          sed -i "s|<pluginVersion>[^<]*</pluginVersion>|<pluginVersion>${VERSION}</pluginVersion>|" plugin.xml
-          sed -i "s|\"version\":[[:space:]]*\"[^\"]*\"|\"version\": \"${VERSION}\"|" webadmin/plugin.json
-
       - name: Cache OIE distribution
         id: oie-cache
         uses: actions/cache@v4
@@ -75,6 +66,17 @@ jobs:
           tar xzf "$OIE_TARBALL"
           test -f "$GITHUB_WORKSPACE/oie/server-lib/mirth-server.jar"
           echo "OIE_HOME=$GITHUB_WORKSPACE/oie" >> "$GITHUB_ENV"
+
+      # Stamp the tag version everywhere the artifact reports it, so installed
+      # (plugin.xml) == offered (oie.json) and self-update detection is correct.
+      # Runs after OIE_HOME is set — every mvn invocation needs it because the pom's
+      # systemPath dependencies resolve ${env.OIE_HOME} at parse time.
+      - name: Stamp version
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          sed -i "s|<pluginVersion>[^<]*</pluginVersion>|<pluginVersion>${VERSION}</pluginVersion>|" plugin.xml
+          sed -i "s|\"version\":[[:space:]]*\"[^\"]*\"|\"version\": \"${VERSION}\"|" webadmin/plugin.json
 
       - name: Build extension
         run: mvn -B -ntp -DskipTests package
