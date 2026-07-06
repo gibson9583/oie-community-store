@@ -1,11 +1,20 @@
 # Publishing to the OIE Community Store
 
-This guide is everything a plugin author needs to make an extension installable
-through the OIE Community Store. There is no project-hosted infrastructure and no
-account to register: the store reads directly from **your GitHub repository and its
-Releases**. You publish an extension by tagging a release with the right assets and
-a small manifest; the store discovers it, verifies it, and installs it through the
-engine's own extension installer.
+This guide is everything an author needs to make a package installable through the
+OIE Community Store. There is no project-hosted infrastructure and no account to
+register, and there are **two ways to publish**:
+
+* **The community catalog (recommended).** PR a small manifest — your artifact's URL
+  (on **any** https host) plus its sha256 — to the
+  [community catalog](https://github.com/gibson9583/oie-community-catalog). CI
+  digest-verifies it before merge; every store picks it up on the next sync. Fully
+  platform-agnostic.
+* **Direct GitHub crawl (zero-setup on-ramp).** The store reads your GitHub
+  repository and its Releases directly: tag a release with the right assets and an
+  `oie.json` manifest, and you appear in any store that lists your repo/org — no
+  registry change at all. This guide's remaining sections describe this path.
+
+Either way the engine downloads, sha256-verifies, and installs everything itself.
 
 - Manifest reference: [`oie.schema.json`](./oie.schema.json)
 - Worked examples: [`examples/oie.json`](../examples/oie.json),
@@ -14,17 +23,20 @@ engine's own extension installer.
 
 ---
 
-## How it works (the 30-second version)
+## How the GitHub crawl works (the 30-second version)
 
-1. Your repository is **listed** — either it lives in a listed GitHub organization
-   and carries the store topic, or it is added by PR to this repo's source list, or
-   an administrator adds it at runtime.
+1. Your repository is **listed** — either it lives under a listed GitHub organization
+   or user account and carries the store topic, or it is added by PR to this repo's
+   source list, or an administrator adds it at runtime.
 2. The store reads your repository's **GitHub Releases**, newest first, and for each
-   release reads **`oie.json`** at the release tag.
+   release reads **`oie.json`** at the release tag. (Content collections with no
+   releases resolve from the default branch — see
+   [Content collections](#content-collections).)
 3. It offers the **newest release compatible** with the running engine.
-4. On install, the engine downloads the release's **`.zip` asset**, verifies it
-   against the published **`.sha256`** sidecar, pre-flights the zip, and installs it
-   through the same code path as a manual extension install.
+4. On install, the engine downloads the artifact, verifies it (the `.zip`'s
+   **`.sha256`** sidecar for extensions), pre-flights, and installs — extensions
+   through the engine's own extension installer, content through the engine's
+   import APIs.
 
 The browser never talks to GitHub; the engine backend does all of it, gated by the
 engine's existing **manage-extensions** permission.
@@ -84,7 +96,7 @@ if it changed) in the same commit you tag.
 | `id` | ✓ | **Must equal the `path` attribute in your `plugin.xml`.** This is the join key: it ties the store listing to the engine's installed inventory for update detection, and the installer refuses an artifact whose descriptor `path` disagrees. Keep it stable across versions. |
 | `name` | ✓ | Display name in the store. |
 | `description` |  | One or two sentences. |
-| `type` | ✓ | `connector`, `plugin`, `datatype`, `code-template-library`, or `channel`. See [Types](#types). |
+| `type` | ✓ | `connector`, `plugin`, `datatype`, `channel`, `code-template`, or `code-template-library`. See [Types](#types). |
 | `version` | ✓ | **Must equal the release tag**, minus an optional leading `v` (tag `v1.4.0` → `1.4.0`). Must be semver-comparable so the store can detect updates. |
 | `minEngineVersion` |  | Lowest engine version supported (inclusive). Omit or `null` for no lower bound. |
 | `maxEngineVersion` |  | Highest engine version supported (inclusive). Omit or `null` for no upper bound. |
@@ -104,10 +116,67 @@ editor.
 
 ### Types
 
-`connector`, `plugin`, and `datatype` are **installable through the store today**.
-`code-template-library` and `channel` are accepted in the manifest and will appear
-in the catalog, but are **not yet installable** through the store — install those
-manually for now.
+All six types install through the store, by two different mechanisms:
+
+* **Extensions** — `connector`, `plugin`, `datatype`: a built `.zip` installed through
+  the engine's extension installer; an engine **restart** activates them.
+* **Content** — `channel`, `code-template`, `code-template-library`: XML exports
+  **imported** through the engine's own APIs; they take effect **immediately**, no
+  restart. A standalone `code-template` prompts the user to add it to a new or
+  existing library at install time. Content is published via a **collection
+  manifest** (see [Content collections](#content-collections)).
+
+---
+
+## Content collections
+
+One repository can publish many pieces of content — channels, code templates, and
+code template libraries — through a single `oie.json` with an **`items`** array
+(see [connect-examples](https://github.com/gibson9583/connect-examples) for a
+complete worked example):
+
+```json
+{
+    "schemaVersion": 1,
+    "name": "My Examples",
+    "publisher": "Acme Health",
+    "license": "MPL-2.0",
+    "items": [
+        {
+            "id": "example-adt-router",
+            "type": "channel",
+            "name": "ADT Router",
+            "description": "Routes ADT messages by event type.",
+            "minEngineVersion": "4.0.0",
+            "contentId": "6de4dab6-cbb8-4840-87bb-31a85fab9101",
+            "artifact": "Channels/ADT Router/ADT Router.xml",
+            "storeDocs": "Channels/ADT Router/README.md"
+        }
+    ]
+}
+```
+
+Per item:
+
+* **`id`** — stable, store-wide unique id for the item.
+* **`type`** — `channel`, `code-template`, or `code-template-library` (extension
+  types are allowed too, but usually belong in single manifests).
+* **`artifact`** — repo-relative path of the installable XML, written as a plain
+  path (spaces are fine; the store URL-encodes it). Fetched raw at the release tag.
+* **`contentId`** — the engine id (UUID) inside the artifact. This is how the store
+  detects the item is installed; content items should always declare it.
+* **`storeDocs`** — repo-relative markdown rendered in the item's detail view.
+  Convention: a `README.md` in the same folder as the artifact.
+* `name`, `description`, `minEngineVersion`/`maxEngineVersion`, `documentation`,
+  `keywords`, `deprecated` — as in single manifests; unset fields inherit from the
+  collection's top level.
+
+**No release required.** When a repository has no GitHub releases, the store resolves
+a collection manifest from the **default branch tip** — publishing is just a push.
+(Repositories *with* releases are read at the newest usable release tag, which pins
+content to that tag.) Since branch content is mutable, prefer submitting content to
+the [community catalog](https://github.com/gibson9583/oie-community-catalog), where
+each version carries a `sha256` that the engine verifies before import.
 
 ---
 
@@ -203,20 +272,28 @@ See [`examples/store.md`](../examples/store.md).
 
 ## 5. Getting listed
 
-A repository becomes visible in the store in any of three ways:
+A repository becomes visible in the store in any of these ways (the first is the
+recommended, platform-agnostic path):
 
-1. **Account + topic (self-service).** If your repository lives under an account
+1. **Submit to the community catalog (recommended).** Open a PR to the
+   [community catalog](https://github.com/gibson9583/oie-community-catalog) adding a
+   small manifest with your artifact's URL and sha256 — the artifact itself can live
+   on **any** https host, not just GitHub. CI verifies the digest before merge, and
+   every connected store picks the package up on its next sync. See the catalog
+   README for the manifest shape.
+
+2. **Account + topic (self-service).** If your repository lives under an account
    listed as an `org` source — a GitHub **organization or a personal user account**
    (the default list includes `OpenIntegrationEngine`) — simply add the
    **`oie-plugin`** topic to the repository and cut a release. These sources
    enumerate every public, non-archived repo under the account carrying the topic —
    no registry change needed. (Up to 300 repos per account are scanned.)
-2. **Add your repo to the bundled source list.** Open a PR to this repository adding
+3. **Add your repo to the bundled source list.** Open a PR to this repository adding
    a `repo` entry to [`src/main/resources/sources.json`](../src/main/resources/sources.json):
    ```json
    { "kind": "repo", "repo": "acme-health/oie-sqs-connector" }
    ```
-3. **Administrator custom source.** An administrator can add your org or repo at
+4. **Administrator custom source.** An administrator can add your org or repo at
    runtime under the store's **Settings** tab (persists on their engine only).
 
 ---
@@ -268,4 +345,4 @@ Settings to raise the limit.
 | Max artifact size | 200 MB |
 | Max rendered docs | 512 KB |
 | Allowed doc link schemes | `http`, `https`, `mailto`, `#` |
-| Installable types | `connector`, `plugin`, `datatype` |
+| Installable types | `connector`, `plugin`, `datatype` (extensions — restart required) · `channel`, `code-template`, `code-template-library` (content — imported, no restart) |

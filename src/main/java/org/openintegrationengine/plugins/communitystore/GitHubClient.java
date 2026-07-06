@@ -65,15 +65,34 @@ public class GitHubClient {
         this.assetHttp = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(15)).build();
     }
 
+    /**
+     * The configured PAT is a GitHub credential — attach it ONLY to GitHub-family hosts.
+     * Catalog indexes and installer artifacts may live on any https host; sending the token
+     * there would leak it to a third party.
+     */
+    private static boolean isGitHubHost(String host) {
+        String h = host == null ? "" : host.toLowerCase();
+        return h.equals("github.com") || h.equals("api.github.com")
+                || h.endsWith(".github.com") || h.equals("raw.githubusercontent.com")
+                || h.endsWith(".githubusercontent.com");
+    }
+
+    private void attachAuth(HttpRequest.Builder builder, String url) {
+        if (!isGitHubHost(hostOf(url))) {
+            return;
+        }
+        String token = tokenSupplier.get();
+        if (token != null && !token.isBlank()) {
+            builder.header("Authorization", "Bearer " + token.trim());
+        }
+    }
+
     /** GET a GitHub REST API URL as parsed JSON, using the ETag cache. */
     public JsonNode getApiJson(String url) throws IOException, InterruptedException {
         CachedResponse cached = etagCache.get(url);
 
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).header("Accept", "application/vnd.github+json").header("X-GitHub-Api-Version", "2022-11-28").header("User-Agent", "oie-community-store");
-        String token = tokenSupplier.get();
-        if (token != null && !token.isBlank()) {
-            builder.header("Authorization", "Bearer " + token.trim());
-        }
+        attachAuth(builder, url);
         if (cached != null && cached.etag != null) {
             builder.header("If-None-Match", cached.etag);
         }
@@ -103,15 +122,12 @@ public class GitHubClient {
     }
 
     /**
-     * GET a raw.githubusercontent.com URL as text, or null on 404. Used for per-tag oie.json
-     * manifests and sha256 sidecars when published as repo files.
+     * GET any https URL as text, or null on 404. Used for oie.json manifests, sha256 sidecars,
+     * and catalog docs pages. Auth is attached only for GitHub-family hosts (see attachAuth).
      */
     public String getRawText(String url) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).header("User-Agent", "oie-community-store");
-        String token = tokenSupplier.get();
-        if (token != null && !token.isBlank()) {
-            builder.header("Authorization", "Bearer " + token.trim());
-        }
+        attachAuth(builder, url);
         HttpResponse<String> response = http.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() == 404) {
             return null;
@@ -120,6 +136,33 @@ public class GitHubClient {
             throw new IOException("Raw fetch failed (HTTP " + response.statusCode() + "): " + url);
         }
         return response.body();
+    }
+
+    /**
+     * GET a prebuilt catalog index (index.json) from any https host as parsed JSON, with ETag
+     * conditional caching. Sends no GitHub-specific headers; auth only for GitHub-family hosts,
+     * so a token never leaks to third-party index hosting (S3, GitLab, a plain web server).
+     */
+    public JsonNode getIndexJson(String url) throws IOException, InterruptedException {
+        CachedResponse cached = etagCache.get(url);
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).header("Accept", "application/json").header("User-Agent", "oie-community-store");
+        attachAuth(builder, url);
+        if (cached != null && cached.etag != null) {
+            builder.header("If-None-Match", cached.etag);
+        }
+        HttpResponse<String> response = http.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+        int status = response.statusCode();
+        if (status == 304 && cached != null) {
+            return mapper.readTree(cached.body);
+        }
+        if (status == 200) {
+            String etag = response.headers().firstValue("etag").orElse(null);
+            if (etag != null) {
+                etagCache.put(url, new CachedResponse(etag, response.body()));
+            }
+            return mapper.readTree(response.body());
+        }
+        throw new IOException("Catalog index fetch failed (HTTP " + status + "): " + url);
     }
 
     /**
@@ -134,9 +177,9 @@ public class GitHubClient {
         String originHost = hostOf(url);
         for (int hop = 0; hop < MAX_REDIRECTS; hop++) {
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(currentUrl)).timeout(Duration.ofMinutes(5)).header("Accept", "application/octet-stream").header("User-Agent", "oie-community-store");
-            String token = tokenSupplier.get();
-            if (token != null && !token.isBlank() && originHost.equalsIgnoreCase(hostOf(currentUrl))) {
-                builder.header("Authorization", "Bearer " + token.trim());
+            // Auth: GitHub-family hosts only, and never across a redirect to a different host.
+            if (originHost.equalsIgnoreCase(hostOf(currentUrl))) {
+                attachAuth(builder, currentUrl);
             }
             HttpResponse<InputStream> response = assetHttp.send(builder.GET().build(), HttpResponse.BodyHandlers.ofInputStream());
             int status = response.statusCode();
@@ -163,16 +206,14 @@ public class GitHubClient {
     }
 
     /**
-     * GET a raw.githubusercontent.com URL as bytes (used for documentation images), or null on
-     * 404. Streamed and capped at maxBytes; the PAT is presented (raw host only) so images in
-     * private-repo docs resolve. Fetched server side so the browser never talks to GitHub.
+     * GET any https URL as bytes (used for documentation images), or null on 404. Streamed and
+     * capped at maxBytes; auth attaches only for GitHub-family hosts (private-repo docs still
+     * resolve, and the token never leaks elsewhere). Fetched server side so the browser never
+     * talks to the artifact host.
      */
     public byte[] getRawBytes(String url, long maxBytes) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).header("User-Agent", "oie-community-store");
-        String token = tokenSupplier.get();
-        if (token != null && !token.isBlank()) {
-            builder.header("Authorization", "Bearer " + token.trim());
-        }
+        attachAuth(builder, url);
         HttpResponse<InputStream> response = http.send(builder.GET().build(), HttpResponse.BodyHandlers.ofInputStream());
         int status = response.statusCode();
         if (status == 404) {

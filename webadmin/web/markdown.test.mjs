@@ -118,6 +118,14 @@ test('in-page fragment link is preserved', () => {
     assert.ok(html.includes('href="#overview"'), 'fragment link was dropped');
 });
 
+test('explicit bases override the GitHub-derived link/image resolution (catalog docs)', () => {
+    const bases = { linkBase: 'https://example.com/pkg/docs/', imageBase: 'https://example.com/pkg/docs/' };
+    const html = renderDocsHtml('[guide](./guide.md) ![shot](img/a.png)', REPO, TAG, {}, bases);
+    assert.ok(html.includes('href="https://example.com/pkg/docs/guide.md"'), 'link did not use the override base');
+    assert.ok(html.includes('src="https://example.com/pkg/docs/img/a.png"'), 'image did not use the override base');
+    assert.ok(!html.includes('githubusercontent'), 'GitHub base leaked through despite override');
+});
+
 test('ordinary markdown (headings, code, tables) renders', () => {
     const html = render('# H1\n\n`inline code`\n\n| a | b |\n|---|---|\n| 1 | 2 |\n');
     assert.ok(/<h1/.test(html) && /<code>/.test(html) && /<table/.test(html), 'basic markdown did not render');

@@ -1,10 +1,10 @@
 # OIE Community Store
 
-A community plugin store for [Open Integration Engine](https://openintegrationengine.org), modeled on the HACS approach: no project-hosted infrastructure, just git. Publisher repositories and organizations are listed in a bundled sources file, each publisher describes releases with an `oie.json` manifest, installable artifacts are `.zip` assets on GitHub Releases, and the engine downloads, sha256-verifies, and installs them through its own extension installer.
+A community package store for [Open Integration Engine](https://openintegrationengine.org) with no project-hosted infrastructure. It distributes **extensions** (plugins, connectors, data types — built `.zip`s, installed through the engine's extension installer) and **content** (channels, code templates, code template libraries — XML imported through the engine's APIs, no restart). Packages come from two kinds of sources: the curated [community catalog](https://github.com/gibson9583/oie-community-catalog) — a static, PR-reviewed index whose entries carry an artifact URL on **any** https host plus its sha256 — and direct GitHub repository/organization crawls (HACS-style: an `oie.json` manifest per repo, artifacts on GitHub Releases) as the zero-setup publisher on-ramp. Either way the engine downloads, sha256-verifies, and installs everything itself.
 
 ## Screenshots
 
-**Browse** — discover connectors, plugins, and data types resolved from GitHub Releases:
+**Browse** — discover connectors, plugins, data types, channels, and code templates from the community catalog and GitHub releases:
 
 ![Browse the catalog](docs/images/browse.png)
 
@@ -20,8 +20,8 @@ A community plugin store for [Open Integration Engine](https://openintegrationen
 
 This is a standard engine extension (Java backend) paired with a web administrator plugin (React frontend), shipped together in one extension zip.
 
-* **Engine side** (`src/main/java`): a `ServicePlugin` plus a JAX-RS servlet at `/api/extensions/communitystore`. It owns all GitHub communication (org enumeration by topic, release resolution, ETag-cached conditional requests, optional PAT), downloads and verifies artifacts against their `.sha256` sidecars, pre-flights the zip, and delegates installation to `ExtensionController.extractExtension`, the same code path as a manual install.
-* **Web side** (`webadmin/`): a React module for the OIE web administrator with Browse, Installed, and Settings views. The browser never talks to GitHub and never handles artifacts; it only calls the servlet.
+* **Engine side** (`src/main/java`): a `ServicePlugin` plus a JAX-RS servlet at `/api/extensions/communitystore`. It owns all outbound communication (catalog index fetches, GitHub org enumeration by topic, release resolution, ETag-cached conditional requests, optional PAT sent to GitHub hosts only), verifies artifacts (inline catalog `sha256` or `.sha256` sidecars), pre-flights extension zips, and installs: extensions through `ExtensionController.extractExtension` (the same code path as a manual install), and content through the engine's channel/code-template controllers.
+* **Web side** (`webadmin/`): a React module for the OIE web administrator with Browse, Installed, and Settings views. The browser never talks to GitHub or artifact hosts and never handles artifacts; it only calls the servlet.
 
 Every REST operation, including catalog reads, is gated by the engine's existing `manageExtensions` permission (`Permissions.EXTENSIONS_MANAGE`). Store access is exactly extension-install access. Installs and uninstalls dispatch server events (user, extension, repo, tag, checksum) to the engine event log.
 
@@ -35,7 +35,7 @@ Requires JDK 17+, Maven, and an OIE installation (or built engine tree) to compi
 OIE_HOME=/path/to/oie mvn package
 ```
 
-The build compiles the jar, builds the web frontend (`webadmin/web/plugin.jsx` to `plugin.js` via esbuild through `frontend-maven-plugin`), and assembles the installable extension at `target/communitystore-0.1.0.zip` with the layout:
+The build compiles the jar, builds the web frontend (`webadmin/web/plugin.jsx` to `plugin.js` via esbuild through `frontend-maven-plugin`), and assembles the installable extension at `target/communitystore-<version>.zip` with the layout:
 
 ```
 communitystore/
@@ -63,27 +63,27 @@ To cut a release: set `version` in `oie.json` to the new value (keep it in sync 
 
 Install `communitystore-<version>.zip` through Extensions in either administrator, restart the engine, and the Community Store appears in the web administrator navigation. The web half is served by the engine (`/api/webplugins/communitystore/...`), so it follows the engine it is installed on.
 
-The store lists its own repository as a source and ships an `oie.json`, so it is **self-updating**: once a newer release is published, the store flags it as an available update in the Installed tab (and installs it through the same verified flow as any other extension).
+The store is listed in the community catalog, so it is **self-updating**: once a newer release is published there, the store flags it as an available update in the Installed tab (and installs it through the same verified flow as any other extension).
 
 ## Sources
 
-The bundled default source list lives at `src/main/resources/sources.json` and updates via PR to this repository:
+The store reads three kinds of sources; the bundled defaults live at `src/main/resources/sources.json` and update via PR to this repository:
 
 ```json
 {
     "schemaVersion": 1,
     "sources": [
-        { "kind": "org", "org": "OpenIntegrationEngine", "topic": "oie-plugin" },
-        { "kind": "repo", "repo": "acme-health/oie-sqs-connector" }
+        { "kind": "catalog", "url": "https://raw.githubusercontent.com/gibson9583/oie-community-catalog/main/index.json" },
+        { "kind": "org", "org": "OpenIntegrationEngine", "topic": "oie-plugin" }
     ],
     "blocklist": []
 }
 ```
 
-* `repo` entries point at one repository.
-* `org` entries include every public repository under an account that carries the topic (default `oie-plugin`). The account may be a GitHub **organization or a personal user** — the store resolves the account type and enumerates accordingly. A publisher under a listed account adds a plugin to the store by tagging the repository with the topic and cutting a release, with no registry change.
+* **`catalog` — the primary distribution channel.** A prebuilt `index.json` (see the [community catalog](https://github.com/gibson9583/oie-community-catalog)) fetched with one conditional request per sync. Each package entry carries an absolute `installerUrl` plus the artifact's `sha256`, so artifacts can live on **any** https host (GitHub Releases, GitLab, S3, a plain web server) and the index itself can be mirrored anywhere — this source kind is fully platform-agnostic. Catalog indexes may also ship a blocklist, which applies to *all* sources on every sync, so takedowns propagate within one sync TTL.
+* **`repo` / `org` — the zero-infrastructure publisher on-ramp.** These live-crawl GitHub releases: `repo` points at one repository; `org` includes every public repository under a GitHub organization **or personal user** carrying the topic (default `oie-plugin`). Tag a repo, cut a release, appear in the store — no registry change.
 
-Administrators can add custom sources and local blocklist entries at runtime in Settings; those persist on the engine. The bundled blocklist always applies.
+When two sources define the same package id, the **first wins** (bundled before custom, catalog before crawled repos), so a repository cannot squat an id the curated catalog already defines. Administrators can add custom sources and local blocklist entries at runtime in Settings; those persist on the engine. The bundled blocklist always applies. The configured GitHub token is only ever sent to GitHub-family hosts — never to third-party catalog or artifact hosts.
 
 ## Publisher contract
 
@@ -130,16 +130,17 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 
 * Artifacts are verified server side against the published sha256 before installation. This proves transport integrity, not publisher identity; the sidecar comes from the same release. Artifact signing is a planned follow-on.
 * The install confirmation states plainly that community content is not vetted by the OIE project. Installing an extension runs its code in the engine; the trust model is identical to manual extension installs.
-* The optional GitHub PAT is stored encrypted via the engine's configuration encryptor and is never returned to the browser (write-only setting).
+* The optional GitHub PAT is stored encrypted via the engine's configuration encryptor and is never returned to the browser (write-only setting). It is attached only to GitHub-family hosts — never sent to third-party catalog or artifact hosts.
 * Pre-flight rejects zips containing path traversal entries and descriptor/id mismatches.
-* Publisher documentation renders through a sanitizing markdown pipeline: raw HTML is escaped rather than passed through, and only http, https, mailto, and fragment link targets are allowed. Documentation is cached engine-side per repo and tag (immutable refs), capped at 512 KB.
+* Publisher documentation renders through a sanitizing markdown pipeline: raw HTML is escaped rather than passed through, and only http, https, mailto, and fragment link targets are allowed. Documentation is cached engine-side, capped at 512 KB.
+* When two sources define the same package id, the first-priority source wins (bundled catalog before crawled repos), so a repository cannot squat an id the curated catalog defines.
 
 ## Current limitations
 
-* Content types (`code-template-library`, `channel`) appear in the catalog but are not yet installable through the store; binary extension types install fully.
 * No dependency resolution between plugins.
-* Update detection relies on `id` matching the extension path and versions being comparable semver.
-* A validator GitHub Action for the publisher contract (manifest schema, tag/version match, checksum presence) is planned as a sibling repository.
+* Update detection for extensions relies on `id` matching the extension path and versions being comparable semver; content items report installed/not-installed (by engine id) without version comparison.
+* Content resolved from the GitHub crawl (rather than the catalog) is verified by TLS only unless the manifest supplies a checksum; catalog packages are always sha256-verified.
+* No artifact signing yet (sha256 proves integrity, not publisher identity) — a sigstore-based signing roadmap is planned.
 
 ## License
 

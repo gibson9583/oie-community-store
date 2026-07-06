@@ -48,12 +48,17 @@ export function resolveDocUrl(href, base) {
  * `images` is an optional { relativePath -> dataUrl } map the backend supplies: it
  * fetches the repo's doc images server side and inlines them as data: URLs, because
  * the admin's CSP blocks external image hosts (img-src 'self' data:) and the browser
- * has no GitHub credentials. A referenced image present in the map renders from that
- * (trusted, raster-only) data URL; anything else falls back to the raw GitHub URL.
+ * has no credentials for the artifact host. A referenced image present in the map
+ * renders from that (trusted, raster-only) data URL; anything else falls back to the
+ * resolved base URL.
+ *
+ * `bases` optionally overrides the GitHub-derived resolution bases — catalog-index
+ * docs live at an absolute docsUrl on any host, so the backend supplies
+ * { linkBase, imageBase } (the docsUrl's directory) instead.
  */
-export function renderDocsHtml(markdown, repo, tag, images) {
-    const rawBase = `https://raw.githubusercontent.com/${repo}/${tag}/`;
-    const blobBase = `https://github.com/${repo}/blob/${tag}/`;
+export function renderDocsHtml(markdown, repo, tag, images, bases) {
+    const rawBase = (bases && bases.imageBase) || `https://raw.githubusercontent.com/${repo}/${tag}/`;
+    const blobBase = (bases && bases.linkBase) || `https://github.com/${repo}/blob/${tag}/`;
     const imageMap = images || {};
     const md = new Marked();
     md.use({

@@ -1,19 +1,10 @@
 {
     "schemaVersion": 1,
-    "comment": "Bundled default sources for the OIE Community Store. 'repo' entries point at a single repository; 'org' entries include every public repository in the organization carrying the topic (default 'oie-plugin'). Update via PR to this repository. Administrators can add custom sources at runtime in the store's Settings tab; the bundled blocklist always applies.",
+    "comment": "Bundled default sources for the OIE Community Store. The 'catalog' source is the primary distribution channel: a prebuilt index.json (curated by PR at github.com/gibson9583/oie-community-catalog) whose entries carry an absolute installerUrl plus sha256, so artifacts can live on any https host and one conditional fetch replaces the per-repo crawl. 'repo' and 'org' sources live-crawl GitHub releases and remain the zero-infrastructure publisher on-ramp: 'repo' points at a single repository; 'org' includes every public repository under a GitHub organization or user carrying the topic (default 'oie-plugin'). Administrators can add custom sources at runtime in Settings; the bundled blocklist always applies, and catalog blocklists apply to all sources on each sync.",
     "sources": [
         {
-            "kind": "org",
-            "org": "OpenIntegrationEngine",
-            "topic": "oie-plugin"
-        },
-        {
-            "kind": "repo",
-            "repo": "gibson9583/oie-community-store"
-        },
-        {
-            "kind": "repo",
-            "repo": "gibson9583/sqs-source-connector"
+            "kind": "catalog",
+            "url": "https://raw.githubusercontent.com/gibson9583/oie-community-catalog/main/index.json"
         }
     ],
     "blocklist": []

@@ -285,7 +285,8 @@ function DocsPanel({ entry }) {
     const html = React.useMemo(() => {
         if (!docs || !docs.found) return null;
         try {
-            return renderDocsHtml(docs.markdown, docs.repo, docs.tag, docs.images);
+            return renderDocsHtml(docs.markdown, docs.repo, docs.tag, docs.images,
+                { linkBase: docs.linkBase, imageBase: docs.imageBase });
         } catch (e) {
             return null;
         }
@@ -349,7 +350,7 @@ function DetailView({ entry, onBack, actions }) {
                     <p>{entry.description || <span className="text-text-dim">No description provided.</span>}</p>
                     <table className="dt mt-3">
                         <tbody>
-                            <tr><td className="text-text-dim">Repository</td><td><a href={`https://github.com/${entry.repo}`} target="_blank" rel="noreferrer">{entry.repo}</a></td></tr>
+                            <tr><td className="text-text-dim">Repository</td><td><a href={entry.repoUrl || `https://github.com/${entry.repo}`} target="_blank" rel="noreferrer">{entry.repo}</a></td></tr>
                             <tr><td className="text-text-dim">Offered version</td><td className="mono">{entry.version} ({entry.tag}){entry.offeredIsLatest ? '' : ` — newest compatible; latest release is ${entry.latestTag}`}</td></tr>
                             <tr><td className="text-text-dim">Engine compatibility</td><td className="mono">{entry.minEngineVersion || 'unspecified'}{entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : '+'}</td></tr>
                             {entry.installedVersion ? <tr><td className="text-text-dim">Installed version</td><td className="mono">{entry.installedVersion}</td></tr> : null}
@@ -637,12 +638,17 @@ function SettingsView({ catalog, onSaved }) {
     const addSource = () => {
         const value = newValue.trim();
         if (!value) return;
-        const source = newKind === 'org'
-            ? { kind: 'org', org: value, topic: newTopic.trim() || 'oie-plugin' }
-            : { kind: 'repo', repo: value };
+        const source = newKind === 'catalog'
+            ? { kind: 'catalog', url: value }
+            : newKind === 'org'
+                ? { kind: 'org', org: value, topic: newTopic.trim() || 'oie-plugin' }
+                : { kind: 'repo', repo: value };
         setSettings({ ...settings, customSources: [...settings.customSources, source] });
         setNewValue('');
     };
+
+    const describeSource = (s) => s.kind === 'catalog' ? `catalog: ${s.url}`
+        : s.kind === 'org' ? `org: ${s.org} (topic: ${s.topic})` : `repo: ${s.repo}`;
 
     return (
         <div className="flex flex-col gap-3" style={{ maxWidth: 760 }}>
@@ -658,13 +664,13 @@ function SettingsView({ catalog, onSaved }) {
                         <tbody>
                             {settings.bundledSources.map((s, i) => (
                                 <tr key={`b${i}`}>
-                                    <td className="mono">{s.kind === 'org' ? `org: ${s.org} (topic: ${s.topic})` : `repo: ${s.repo}`}</td>
+                                    <td className="mono">{describeSource(s)}</td>
                                     <td className="text-text-dim">bundled</td><td></td>
                                 </tr>
                             ))}
                             {settings.customSources.map((s, i) => (
                                 <tr key={`c${i}`}>
-                                    <td className="mono">{s.kind === 'org' ? `org: ${s.org} (topic: ${s.topic})` : `repo: ${s.repo}`}</td>
+                                    <td className="mono">{describeSource(s)}</td>
                                     <td className="text-text-dim">custom</td>
                                     <td><button className="btn" onClick={() =>
                                         setSettings({ ...settings, customSources: settings.customSources.filter((_, j) => j !== i) })
@@ -677,9 +683,10 @@ function SettingsView({ catalog, onSaved }) {
                         <select className="field" style={{ maxWidth: 110 }} value={newKind} onChange={(e) => setNewKind(e.target.value)}>
                             <option value="repo">repo</option>
                             <option value="org">org</option>
+                            <option value="catalog">catalog</option>
                         </select>
-                        <input className="field" style={{ maxWidth: 260 }} value={newValue} onChange={(e) => setNewValue(e.target.value)}
-                            placeholder={newKind === 'org' ? 'organization login' : 'owner/repository'} />
+                        <input className="field" style={{ maxWidth: newKind === 'catalog' ? 380 : 260 }} value={newValue} onChange={(e) => setNewValue(e.target.value)}
+                            placeholder={newKind === 'catalog' ? 'https://…/index.json' : newKind === 'org' ? 'organization or user login' : 'owner/repository'} />
                         {newKind === 'org' ? (
                             <input className="field" style={{ maxWidth: 160 }} value={newTopic} onChange={(e) => setNewTopic(e.target.value)}
                                 placeholder="topic filter" />

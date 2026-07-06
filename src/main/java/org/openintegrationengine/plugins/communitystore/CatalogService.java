@@ -103,9 +103,11 @@ public class CatalogService {
     private static final int MAX_DOCS_CHARS = 512_000;
 
     /**
-     * Fetches publisher documentation for a catalog entry, read at its release tag so docs are
-     * versioned with the artifact. Resolution order: the manifest's optional storeDocs path,
-     * then store.md, docs/store.md, and README.md. Returns {found:false} when none exist.
+     * Fetches publisher documentation for a catalog entry. Catalog-index entries carry an
+     * absolute docsUrl (any host); crawled entries resolve repo-relative candidates at the
+     * release tag: the manifest's optional storeDocs path, then store.md, docs/store.md, and
+     * README.md. Returns {found:false} when none exist. The result carries linkBase/imageBase
+     * so the client resolves relative links against the right location.
      */
     public ObjectNode getDocs(String id) throws Exception {
         ObjectNode entry = findEntry(id);
@@ -114,11 +116,29 @@ public class CatalogService {
         }
         String repo = entry.path("repo").asText();
         String tag = entry.path("tag").asText();
-        String cacheKey = repo + "@" + tag;
+        String docsUrl = entry.path("docsUrl").asText("");
+        String cacheKey = docsUrl.isEmpty() ? repo + "@" + tag : docsUrl;
 
         ObjectNode cached = docsCache.get(cacheKey);
         if (cached != null) {
             return cached;
+        }
+
+        ObjectNode result = MAPPER.createObjectNode();
+        result.put("found", false);
+        result.put("repo", repo);
+        result.put("tag", tag);
+
+        if (!docsUrl.isEmpty()) {
+            // Catalog entry: one absolute markdown URL; relative links/images resolve
+            // against its directory, wherever it is hosted.
+            String base = docsUrl.substring(0, docsUrl.lastIndexOf('/') + 1);
+            String markdown = gitHub.getRawText(docsUrl);
+            if (markdown != null) {
+                fillDocsResult(result, markdown, docsUrl.substring(docsUrl.lastIndexOf('/') + 1), base, base, base);
+            }
+            docsCache.put(cacheKey, result);
+            return result;
         }
 
         List<String> candidates = new ArrayList<>();
@@ -130,29 +150,37 @@ public class CatalogService {
         candidates.add("docs/store.md");
         candidates.add("README.md");
 
-        ObjectNode result = MAPPER.createObjectNode();
-        result.put("found", false);
-        result.put("repo", repo);
-        result.put("tag", tag);
+        String rawBase = GitHubClient.RAW_BASE + "/" + repo + "/" + tag + "/";
+        String blobBase = "https://github.com/" + repo + "/blob/" + tag + "/";
         for (String path : candidates) {
-            String markdown = gitHub.getRawText(GitHubClient.RAW_BASE + "/" + repo + "/" + tag + "/" + path);
+            // Candidate paths are manifest-authored plain paths; encode each segment so
+            // folders with spaces (e.g. "Code Templates/…") form a valid URL.
+            String markdown = gitHub.getRawText(rawBase + encodePath(path));
             if (markdown != null) {
-                boolean truncated = markdown.length() > MAX_DOCS_CHARS;
-                String body = truncated ? markdown.substring(0, MAX_DOCS_CHARS) : markdown;
-                result.put("found", true);
-                result.put("path", path);
-                result.put("truncated", truncated);
-                result.put("markdown", body);
-                // Fetch relative raster images server side and inline them as data: URLs.
-                // The browser can't load raw.githubusercontent.com images (the admin's CSP
-                // allows img-src 'self' data: only, and the browser has no GitHub credentials),
-                // so the engine resolves them — honoring the PAT for private-repo docs.
-                inlineDocImages(body, repo, tag, result.putObject("images"));
+                fillDocsResult(result, markdown, path, rawBase, blobBase, rawBase);
                 break;
             }
         }
         docsCache.put(cacheKey, result);
         return result;
+    }
+
+    /**
+     * Populates a docs result: truncation, the markdown body, resolution bases for the client,
+     * and server-side inlined raster images. The browser can't load images from artifact hosts
+     * (the admin's CSP allows img-src 'self' data: only, and the browser holds no credentials),
+     * so the engine fetches and inlines them as data: URLs.
+     */
+    private void fillDocsResult(ObjectNode result, String markdown, String path, String fetchBase, String linkBase, String imageBase) {
+        boolean truncated = markdown.length() > MAX_DOCS_CHARS;
+        String body = truncated ? markdown.substring(0, MAX_DOCS_CHARS) : markdown;
+        result.put("found", true);
+        result.put("path", path);
+        result.put("truncated", truncated);
+        result.put("markdown", body);
+        result.put("linkBase", linkBase);
+        result.put("imageBase", imageBase);
+        inlineDocImages(body, fetchBase, result.putObject("images"));
     }
 
     /** Markdown image syntax: capture the URL in ![alt](url ...). */
@@ -163,12 +191,11 @@ public class CatalogService {
 
     /**
      * Resolve the relative raster images referenced by a docs page and inline each as a
-     * data: URL under its repo-relative path, keyed exactly as written in the markdown (a
+     * data: URL under its relative path, keyed exactly as written in the markdown (a
      * leading "./" stripped). External URLs, data:/fragment refs, path-traversal, and SVG are
      * skipped — the client leaves those to its own protocol-allowlisting resolver.
      */
-    private void inlineDocImages(String markdown, String repo, String tag, ObjectNode images) {
-        String rawBase = GitHubClient.RAW_BASE + "/" + repo + "/" + tag + "/";
+    private void inlineDocImages(String markdown, String rawBase, ObjectNode images) {
         Set<String> seen = new HashSet<>();
         long total = 0;
         Matcher matcher = MD_IMAGE.matcher(markdown);
@@ -184,14 +211,16 @@ public class CatalogService {
                 continue;
             }
             try {
-                byte[] bytes = gitHub.getRawBytes(rawBase + key, MAX_DOC_IMAGE_BYTES);
+                // Keys come verbatim from the markdown; encode only spaces so already
+                // percent-encoded references aren't double-encoded.
+                byte[] bytes = gitHub.getRawBytes(rawBase + key.replace(" ", "%20"), MAX_DOC_IMAGE_BYTES);
                 if (bytes == null || bytes.length == 0 || total + bytes.length > MAX_DOC_IMAGE_TOTAL) {
                     continue;
                 }
                 total += bytes.length;
                 images.put(key, "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes));
             } catch (Exception e) {
-                logger.warn("Community Store: could not inline doc image " + key + " for " + repo + "@" + tag + ": " + e.getMessage());
+                logger.warn("Community Store: could not inline doc image " + key + " from " + rawBase + ": " + e.getMessage());
             }
         }
     }
@@ -211,11 +240,21 @@ public class CatalogService {
         ArrayNode entries = catalog.putArray("entries");
         ArrayNode errors = catalog.putArray("errors");
 
-        // Expand sources into a deduplicated ordered repo set.
+        String engineVersion = ConfigurationController.getInstance().getServerVersion();
+        SemVer engine = SemVer.parse(engineVersion);
+
+        // Expand sources. Catalog indexes are resolved first (they also carry a remote
+        // blocklist, which then applies to crawled sources too — takedowns propagate in
+        // one sync instead of one store release); repo/org sources collect into an
+        // ordered, deduplicated repo set.
+        List<ObjectNode> indexEntries = new ArrayList<>();
+        Set<String> remoteBlock = new HashSet<>();
         Map<String, String> repos = new LinkedHashMap<>(); // full name -> originating source description
         for (StoreSettings.SourceDef source : settings.getEffectiveSources()) {
             try {
-                if ("repo".equals(source.kind)) {
+                if ("catalog".equals(source.kind)) {
+                    entriesFromIndex(source.url, source.describe(), engine, indexEntries, remoteBlock);
+                } else if ("repo".equals(source.kind)) {
                     repos.putIfAbsent(source.repo, source.describe());
                 } else {
                     for (String fullName : enumerateOrgRepos(source.org, source.topic)) {
@@ -228,16 +267,33 @@ public class CatalogService {
             }
         }
 
-        String engineVersion = ConfigurationController.getInstance().getServerVersion();
-        SemVer engine = SemVer.parse(engineVersion);
+        // First source wins per package id: bundled sources precede custom ones and the
+        // official catalog precedes crawled repos, so a repo cannot squat an id that a
+        // higher-priority source already defines.
+        Set<String> seenIds = new HashSet<>();
+        for (ObjectNode entry : indexEntries) {
+            String repoName = entry.path("repo").asText("");
+            if (settings.isBlocked(repoName) || remoteBlock.contains(repoName.toLowerCase())) {
+                continue;
+            }
+            if (!seenIds.add(entry.path("id").asText())) {
+                logger.info("Community Store: duplicate id '" + entry.path("id").asText() + "' from " + entry.path("source").asText() + " ignored (already defined by an earlier source).");
+                continue;
+            }
+            entries.add(entry);
+        }
 
         for (Map.Entry<String, String> repo : repos.entrySet()) {
             String fullName = repo.getKey();
-            if (settings.isBlocked(fullName)) {
+            if (settings.isBlocked(fullName) || remoteBlock.contains(fullName.toLowerCase())) {
                 continue;
             }
             try {
                 for (ObjectNode entry : resolveRepo(fullName, engine)) {
+                    if (!seenIds.add(entry.path("id").asText())) {
+                        logger.info("Community Store: duplicate id '" + entry.path("id").asText() + "' from " + fullName + " ignored (already defined by an earlier source).");
+                        continue;
+                    }
                     entry.put("source", repo.getValue());
                     entries.add(entry);
                 }
@@ -251,6 +307,130 @@ public class CatalogService {
         catalog.put("engineVersion", engineVersion);
         catalog.put("rateLimitRemaining", gitHub.getRateLimitRemaining());
         return catalog;
+    }
+
+    /** Index schema versions this store understands (see the catalog repo's build-index script). */
+    private static final int MAX_INDEX_SCHEMA = 1;
+
+    /**
+     * Resolves a prebuilt catalog index (index.json at any https URL) into catalog entries —
+     * one conditional GET replaces the whole per-repo release crawl. Each package offers its
+     * newest engine-compatible version; the index's blocklist merges into this sync's
+     * effective blocklist.
+     */
+    private void entriesFromIndex(String url, String sourceDescription, SemVer engine, List<ObjectNode> out, Set<String> remoteBlock) throws Exception {
+        JsonNode index = gitHub.getIndexJson(url);
+        int schema = index.path("schemaVersion").asInt(1);
+        if (schema > MAX_INDEX_SCHEMA) {
+            throw new IOException("Catalog index declares schemaVersion " + schema + ", but this store supports up to " + MAX_INDEX_SCHEMA + ". Update the Community Store.");
+        }
+        for (JsonNode blocked : index.path("blocklist")) {
+            String value = blocked.asText("").trim().toLowerCase();
+            if (value.matches("[\\w.-]+/[\\w.-]+")) {
+                remoteBlock.add(value);
+            }
+        }
+        for (JsonNode pkg : index.path("packages")) {
+            try {
+                ObjectNode entry = entryFromIndexPackage(pkg, engine);
+                if (entry != null) {
+                    entry.put("source", sourceDescription);
+                    out.add(entry);
+                }
+            } catch (Exception e) {
+                logger.warn("Community Store: skipping catalog package '" + pkg.path("id").asText("?") + "': " + e.getMessage());
+            }
+        }
+    }
+
+    /** One catalog entry from an index package: its newest engine-compatible version. */
+    private ObjectNode entryFromIndexPackage(JsonNode pkg, SemVer engine) {
+        String id = pkg.path("id").asText("");
+        String type = pkg.path("type").asText("");
+        JsonNode versions = pkg.path("versions");
+        if (id.isEmpty() || type.isEmpty() || !versions.isArray() || versions.isEmpty()) {
+            return null;
+        }
+
+        // Versions are index-sorted newest first; walk for the newest compatible one,
+        // falling back to the newest overall as an incompatible listing.
+        JsonNode offered = null;
+        boolean compatible = false;
+        for (JsonNode v : versions) {
+            SemVer min = SemVer.parse(v.path("minEngineVersion").asText(null));
+            SemVer max = SemVer.parse(v.path("maxEngineVersion").asText(null));
+            if (SemVer.inRange(engine, min, max)) {
+                offered = v;
+                compatible = true;
+                break;
+            }
+        }
+        if (offered == null) {
+            offered = versions.get(0);
+        }
+        String latestVersion = versions.get(0).path("version").asText("");
+        String version = offered.path("version").asText("");
+
+        String repository = pkg.path("repository").asText("");
+        ObjectNode entry = MAPPER.createObjectNode();
+        entry.put("id", id);
+        entry.put("name", pkg.path("name").asText(id));
+        entry.put("description", pkg.path("description").asText(""));
+        entry.put("type", type);
+        entry.put("repo", displayRepo(repository));
+        entry.put("repoUrl", repository);
+        entry.put("tag", version);
+        entry.put("version", version);
+        entry.put("minEngineVersion", offered.path("minEngineVersion").asText(""));
+        entry.put("maxEngineVersion", offered.path("maxEngineVersion").asText(""));
+        entry.put("compatible", compatible);
+        entry.put("homepage", pkg.path("homepage").asText(repository));
+        entry.put("documentation", pkg.path("documentation").asText(""));
+        entry.put("docsUrl", offered.path("docsUrl").asText(""));
+        entry.put("storeDocs", "");
+        entry.put("license", pkg.path("license").asText(""));
+        entry.put("deprecated", pkg.path("deprecated").asBoolean(false));
+        entry.put("deprecationMessage", pkg.path("deprecationMessage").asText(""));
+        entry.put("publishedAt", offered.path("publishedAt").asText(""));
+        entry.put("releaseUrl", offered.path("releaseNotesUrl").asText(""));
+        entry.put("latestTag", latestVersion);
+        entry.put("offeredIsLatest", version.equals(latestVersion));
+        entry.put("contentId", pkg.path("contentId").asText(""));
+
+        boolean binaryType = isBinaryType(type);
+        boolean contentType = isContentType(type);
+        entry.put("restartRequired", offered.has("restartRequired") ? offered.path("restartRequired").asBoolean(binaryType) : binaryType);
+        entry.put("installable", binaryType || contentType);
+
+        ArrayNode authors = entry.putArray("authors");
+        for (JsonNode a : pkg.path("authors")) {
+            authors.add(a.asText());
+        }
+        ArrayNode keywords = entry.putArray("keywords");
+        for (JsonNode k : pkg.path("keywords")) {
+            keywords.add(k.asText());
+        }
+
+        String installerUrl = offered.path("installerUrl").asText("");
+        entry.put("assetName", installerUrl.isEmpty() ? "" : installerUrl.substring(installerUrl.lastIndexOf('/') + 1));
+        entry.put("assetUrl", installerUrl);
+        entry.put("checksumUrl", "");
+        entry.put("sha256", offered.path("sha256").asText(""));
+        return entry;
+    }
+
+    /** "owner/name" for GitHub repository URLs; host+path for anything else. */
+    private static String displayRepo(String repositoryUrl) {
+        try {
+            java.net.URI uri = java.net.URI.create(repositoryUrl);
+            String path = uri.getPath() == null ? "" : uri.getPath().replaceAll("^/|/$", "");
+            if ("github.com".equalsIgnoreCase(uri.getHost())) {
+                return path;
+            }
+            return uri.getHost() == null ? repositoryUrl : uri.getHost() + (path.isEmpty() ? "" : "/" + path);
+        } catch (Exception e) {
+            return repositoryUrl;
+        }
     }
 
     private List<String> enumerateOrgRepos(String org, String topic) throws Exception {
@@ -424,6 +604,7 @@ public class CatalogService {
         entry.put("description", item.path("description").asText(""));
         entry.put("type", type);
         entry.put("repo", fullName);
+        entry.put("repoUrl", "https://github.com/" + fullName);
         entry.put("tag", tag);
         entry.put("version", item.path("version").asText(fallbackVersion));
         entry.put("minEngineVersion", min);
@@ -499,6 +680,7 @@ public class CatalogService {
         entry.put("description", manifest.path("description").asText(""));
         entry.put("type", manifest.path("type").asText("plugin"));
         entry.put("repo", fullName);
+        entry.put("repoUrl", "https://github.com/" + fullName);
         entry.put("tag", tag);
         entry.put("version", manifest.path("version").asText(tag.replaceFirst("^[vV]", "")));
         entry.put("minEngineVersion", manifest.path("minEngineVersion").asText(""));

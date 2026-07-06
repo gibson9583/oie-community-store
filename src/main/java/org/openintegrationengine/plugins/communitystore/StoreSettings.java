@@ -36,26 +36,37 @@ public class StoreSettings {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static class SourceDef {
-        public final String kind;   // "repo" | "org"
+        public final String kind;   // "repo" | "org" | "catalog"
         public final String repo;   // owner/name, for kind=repo
         public final String org;    // org login, for kind=org
         public final String topic;  // topic filter, for kind=org
+        public final String url;    // index.json URL, for kind=catalog
 
         public SourceDef(String kind, String repo, String org, String topic) {
+            this(kind, repo, org, topic, null);
+        }
+
+        public SourceDef(String kind, String repo, String org, String topic, String url) {
             this.kind = kind;
             this.repo = repo;
             this.org = org;
             this.topic = topic;
+            this.url = url;
         }
 
         public String describe() {
+            if ("catalog".equals(kind)) {
+                return "catalog:" + url;
+            }
             return "org".equals(kind) ? "org:" + org + " (topic: " + topic + ")" : "repo:" + repo;
         }
 
         public ObjectNode toJson() {
             ObjectNode node = MAPPER.createObjectNode();
             node.put("kind", kind);
-            if ("org".equals(kind)) {
+            if ("catalog".equals(kind)) {
+                node.put("url", url);
+            } else if ("org".equals(kind)) {
                 node.put("org", org);
                 node.put("topic", topic);
             } else {
@@ -78,6 +89,19 @@ public class StoreSettings {
 
         public static SourceDef fromJson(JsonNode node) {
             String kind = node.path("kind").asText("repo");
+            if ("catalog".equals(kind)) {
+                // A prebuilt index (index.json) at any https URL — the platform-agnostic source.
+                String url = node.path("url").asText("").trim();
+                try {
+                    java.net.URI uri = java.net.URI.create(url);
+                    if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+                        return null;
+                    }
+                } catch (Exception e) {
+                    return null;
+                }
+                return new SourceDef("catalog", null, null, null, url);
+            }
             if ("org".equals(kind)) {
                 String org = node.path("org").asText("").trim();
                 if (org.isEmpty() || !OWNER.matcher(org).matches()) {

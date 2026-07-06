@@ -2,91 +2,105 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://openintegrationengine.org/community-store/oie.schema.json",
     "title": "OIE Community Store manifest (oie.json)",
-    "description": "Per-release manifest that describes an extension to the OIE Community Store. Lives at the repository root and is read at each release tag, so its values are version-specific.",
-    "type": "object",
-    "required": ["schemaVersion", "id", "name", "type", "version"],
-    "additionalProperties": true,
-    "properties": {
-        "schemaVersion": {
-            "description": "Manifest schema version. Currently 1.",
-            "type": "integer",
-            "const": 1
-        },
-        "id": {
-            "description": "Stable extension id. MUST equal the 'path' attribute of the extension's plugin.xml. Used to match store records against the engine's installed inventory for update detection.",
-            "type": "string",
-            "pattern": "^[A-Za-z0-9._-]+$"
-        },
-        "name": {
-            "description": "Human-readable display name shown in the store.",
-            "type": "string",
-            "minLength": 1
-        },
-        "description": {
-            "description": "One or two sentences describing what the extension does.",
-            "type": "string"
-        },
+    "description": "Per-release manifest read at each release tag (or, for collections with no releases, at the default-branch tip). Two shapes: a SINGLE manifest describing one extension, or a COLLECTION whose 'items' array lists many installable pieces of content (channels, code templates, code template libraries) or extensions in one repository.",
+    "oneOf": [
+        { "$ref": "#/definitions/single" },
+        { "$ref": "#/definitions/collection" }
+    ],
+    "definitions": {
         "type": {
-            "description": "Extension category. connector, plugin, and datatype are installable through the store today; code-template-library and channel are listed but not yet installable.",
+            "description": "Extension/content category. plugin, connector, and datatype are binary extensions installed through the engine's extension installer (restart required). channel, code-template, and code-template-library are content, imported through the engine's APIs with no restart.",
             "type": "string",
-            "enum": ["connector", "plugin", "datatype", "code-template-library", "channel"]
+            "enum": ["plugin", "connector", "datatype", "channel", "code-template", "code-template-library"]
         },
-        "version": {
-            "description": "Extension version. MUST equal the release tag, modulo an optional leading 'v' (tag v1.4.0 -> version 1.4.0). Semantic-versioning comparable, so the store can detect updates.",
-            "type": "string",
-            "pattern": "^[0-9]+(\\.[0-9]+)*([.-].+)?$"
+        "engineVersion": { "type": ["string", "null"] },
+        "common": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "description": { "type": "string" },
+                "minEngineVersion": { "$ref": "#/definitions/engineVersion" },
+                "maxEngineVersion": { "$ref": "#/definitions/engineVersion" },
+                "homepage": { "type": "string", "format": "uri" },
+                "documentation": { "type": "string", "format": "uri" },
+                "storeDocs": {
+                    "description": "Repo-relative path to markdown rendered in the store detail view. Must be relative (no leading '/', no '..').",
+                    "type": "string"
+                },
+                "license": { "type": "string" },
+                "authors": { "type": "array", "items": { "type": "string" } },
+                "keywords": { "type": "array", "items": { "type": "string" } },
+                "deprecated": { "type": "boolean" },
+                "deprecationMessage": { "type": "string" },
+                "restartRequired": { "type": "boolean" }
+            }
         },
-        "minEngineVersion": {
-            "description": "Lowest engine version this release supports (inclusive). Omit or null for no lower bound.",
-            "type": ["string", "null"]
+        "single": {
+            "description": "One extension per repository — the artifact is a .zip asset on the GitHub release, paired with a <asset>.zip.sha256 sidecar.",
+            "type": "object",
+            "required": ["schemaVersion", "id", "name", "type", "version"],
+            "allOf": [{ "$ref": "#/definitions/common" }],
+            "properties": {
+                "schemaVersion": { "type": "integer", "const": 1 },
+                "id": {
+                    "description": "Stable extension id. MUST equal the 'path' attribute of the extension's plugin.xml — that is how installed-version tracking works.",
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9._-]+$"
+                },
+                "type": { "$ref": "#/definitions/type" },
+                "version": {
+                    "description": "MUST equal the release tag, modulo an optional leading 'v'.",
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)*([.-].+)?$"
+                },
+                "filename": {
+                    "description": "Which release asset to install when the release has more than one .zip. Supports a {version} placeholder.",
+                    "type": "string"
+                }
+            }
         },
-        "maxEngineVersion": {
-            "description": "Highest engine version this release supports (inclusive). Omit or null for no upper bound.",
-            "type": ["string", "null"]
-        },
-        "filename": {
-            "description": "Name of the release asset to install. Optional: if omitted, the store uses the single .zip asset on the release. Supports a {version} placeholder, e.g. 'sqs-connector-{version}.zip'.",
-            "type": "string"
-        },
-        "restartRequired": {
-            "description": "Whether activating the extension needs an engine restart. Defaults to true for installable (binary) types.",
-            "type": "boolean"
-        },
-        "homepage": {
-            "description": "Project homepage. Defaults to the GitHub repository URL.",
-            "type": "string",
-            "format": "uri"
-        },
-        "documentation": {
-            "description": "External documentation URL, surfaced as a 'Documentation' button.",
-            "type": "string",
-            "format": "uri"
-        },
-        "storeDocs": {
-            "description": "Repo-relative path to the markdown rendered in the store detail view. Optional; if omitted the store looks for store.md, docs/store.md, then README.md. Must be a relative path (no leading '/', no '..').",
-            "type": "string"
-        },
-        "license": {
-            "description": "SPDX license identifier, e.g. MPL-2.0 or Apache-2.0.",
-            "type": "string"
-        },
-        "authors": {
-            "description": "Author or maintainer names.",
-            "type": "array",
-            "items": { "type": "string" }
-        },
-        "keywords": {
-            "description": "Search/filter keywords.",
-            "type": "array",
-            "items": { "type": "string" }
-        },
-        "deprecated": {
-            "description": "Marks the extension as deprecated; the store shows a Deprecated badge.",
-            "type": "boolean"
-        },
-        "deprecationMessage": {
-            "description": "Optional explanation shown when deprecated is true (e.g. a replacement to use instead).",
-            "type": "string"
+        "collection": {
+            "description": "Many items in one repository (e.g. an examples repo). Each item's artifact is a repo-relative file fetched raw at the release tag — or at the default-branch tip when the repository has no releases, so content collections publish with just a push.",
+            "type": "object",
+            "required": ["schemaVersion", "items"],
+            "allOf": [{ "$ref": "#/definitions/common" }],
+            "properties": {
+                "schemaVersion": { "type": "integer", "const": 1 },
+                "publisher": { "type": "string" },
+                "version": { "description": "Fallback item version.", "type": "string" },
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "required": ["id", "type", "artifact"],
+                        "allOf": [{ "$ref": "#/definitions/common" }],
+                        "properties": {
+                            "id": {
+                                "description": "Stable id for this item, unique across the whole store.",
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9._-]+$"
+                            },
+                            "type": { "$ref": "#/definitions/type" },
+                            "version": { "type": "string" },
+                            "artifact": {
+                                "description": "Repo-relative path of the installable file (channel/code-template/library XML). Plain path — the store URL-encodes it.",
+                                "type": "string"
+                            },
+                            "contentId": {
+                                "description": "REQUIRED in practice for content items: the engine id (UUID) inside the artifact, used for installed-detection.",
+                                "type": "string",
+                                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                            },
+                            "checksumUrl": {
+                                "description": "Optional absolute URL of a sha256 sidecar for the artifact.",
+                                "type": "string",
+                                "format": "uri"
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

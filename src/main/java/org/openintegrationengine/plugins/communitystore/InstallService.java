@@ -90,12 +90,17 @@ public class InstallService {
             if (!CatalogService.isBinaryType(type)) {
                 throw new IOException("Type '" + type + "' is not installable through the store.");
             }
-            if (checksumUrl.isEmpty()) {
+            // Catalog-index entries carry the digest inline; crawled release entries publish a
+            // .sha256 sidecar asset. Either satisfies the mandatory-verification rule.
+            String inlineSha256 = entry.path("sha256").asText("");
+            if (inlineSha256.isEmpty() && checksumUrl.isEmpty()) {
                 throw new IOException("Release " + tag + " of " + repo + " is missing the required " + assetName + ".sha256 checksum asset.");
             }
 
             byte[] artifact = gitHub.downloadAsset(assetUrl);
-            String expected = parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8));
+            String expected = inlineSha256.isEmpty()
+                    ? parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8))
+                    : inlineSha256;
             String actual = sha256Hex(artifact);
             if (!actual.equalsIgnoreCase(expected)) {
                 throw new IOException("Checksum verification FAILED for " + assetName + ": expected " + expected + " but computed " + actual + ". The artifact was not installed.");
@@ -135,11 +140,11 @@ public class InstallService {
             String assetUrl, String checksumUrl, Integer userId) throws Exception {
         byte[] artifact = gitHub.downloadAsset(assetUrl);
         String actual = sha256Hex(artifact);
-        if (!checksumUrl.isEmpty()) {
-            String expected = parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8));
-            if (!actual.equalsIgnoreCase(expected)) {
-                throw new IOException("Checksum verification FAILED for " + id + ": expected " + expected + " but computed " + actual + ". Nothing was imported.");
-            }
+        String inlineSha256 = entry.path("sha256").asText("");
+        String expected = !inlineSha256.isEmpty() ? inlineSha256
+                : (!checksumUrl.isEmpty() ? parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8)) : "");
+        if (!expected.isEmpty() && !actual.equalsIgnoreCase(expected)) {
+            throw new IOException("Checksum verification FAILED for " + id + ": expected " + expected + " but computed " + actual + ". Nothing was imported.");
         }
         String xml = new String(artifact, StandardCharsets.UTF_8);
         ObjectXMLSerializer serializer = ObjectXMLSerializer.getInstance();
