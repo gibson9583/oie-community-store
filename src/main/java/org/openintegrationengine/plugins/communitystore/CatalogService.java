@@ -7,8 +7,11 @@
 package org.openintegrationengine.plugins.communitystore;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +29,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mirth.connect.model.MetaData;
+import com.mirth.connect.model.codetemplates.CodeTemplate;
+import com.mirth.connect.model.codetemplates.CodeTemplateLibrary;
+import com.mirth.connect.server.controllers.ChannelController;
+import com.mirth.connect.server.controllers.CodeTemplateController;
 import com.mirth.connect.server.controllers.ConfigurationController;
 import com.mirth.connect.server.controllers.ControllerFactory;
 import com.mirth.connect.server.controllers.ExtensionController;
@@ -230,8 +237,7 @@ public class CatalogService {
                 continue;
             }
             try {
-                ObjectNode entry = resolveRepo(fullName, engine);
-                if (entry != null) {
+                for (ObjectNode entry : resolveRepo(fullName, engine)) {
                     entry.put("source", repo.getValue());
                     entries.add(entry);
                 }
@@ -287,14 +293,15 @@ public class CatalogService {
     }
 
     /**
-     * Walks a repository's releases newest to oldest and returns the newest release whose
-     * manifest declares compatibility with the running engine ("newest compatible" resolution).
-     * Returns null when the repository has no usable release at all.
+     * Resolves a repository to its catalog entries. A single-manifest repo yields one entry (the
+     * newest engine-compatible release); a collection manifest — one with an "items" array — yields
+     * one entry per item, resolved from the newest usable release (per-item compatibility). Returns
+     * an empty list when the repository has no usable release.
      */
-    private ObjectNode resolveRepo(String fullName, SemVer engine) throws Exception {
+    private List<ObjectNode> resolveRepo(String fullName, SemVer engine) throws Exception {
         JsonNode releases = gitHub.getApiJson(GitHubClient.API_BASE + "/repos/" + fullName + "/releases?per_page=" + RELEASES_PER_REPO);
         if (!releases.isArray() || releases.isEmpty()) {
-            return null;
+            return Collections.emptyList();
         }
 
         String latestTag = null;
@@ -320,21 +327,25 @@ public class CatalogService {
                 continue;
             }
 
-            SemVer min = SemVer.parse(manifest.path("minEngineVersion").asText(null));
-            SemVer max = SemVer.parse(manifest.path("maxEngineVersion").asText(null));
-            boolean compatible = SemVer.inRange(engine, min, max);
-            if (!compatible) {
-                continue; // keep walking for an older compatible release
+            // Collection: one entry per declared item, from this (newest usable) release.
+            if (manifest.path("items").isArray()) {
+                return entriesFromCollection(fullName, tag, release, manifest, engine, latestTag);
             }
 
+            // Single manifest: newest engine-compatible release.
+            SemVer min = SemVer.parse(manifest.path("minEngineVersion").asText(null));
+            SemVer max = SemVer.parse(manifest.path("maxEngineVersion").asText(null));
+            if (!SemVer.inRange(engine, min, max)) {
+                continue; // keep walking for an older compatible release
+            }
             ObjectNode entry = entryFromManifest(fullName, tag, release, manifest);
             entry.put("compatible", true);
             entry.put("latestTag", latestTag);
             entry.put("offeredIsLatest", tag.equals(latestTag));
-            return entry;
+            return Collections.singletonList(entry);
         }
 
-        // Nothing compatible: surface the newest release as an incompatible listing so users see why.
+        // Nothing compatible: surface the newest single-manifest release as an incompatible listing.
         for (JsonNode release : releases) {
             if (release.path("draft").asBoolean(false) || release.path("prerelease").asBoolean(false)) {
                 continue;
@@ -344,16 +355,103 @@ public class CatalogService {
                 continue;
             }
             JsonNode manifest = fetchManifest(fullName, tag);
-            if (manifest == null) {
-                return null;
+            if (manifest == null || manifest.path("items").isArray()) {
+                return Collections.emptyList();
             }
             ObjectNode entry = entryFromManifest(fullName, tag, release, manifest);
             entry.put("compatible", false);
             entry.put("latestTag", tag);
             entry.put("offeredIsLatest", true);
-            return entry;
+            return Collections.singletonList(entry);
         }
-        return null;
+        return Collections.emptyList();
+    }
+
+    /** Builds one catalog entry per item declared in a collection manifest. */
+    private List<ObjectNode> entriesFromCollection(String fullName, String tag, JsonNode release, JsonNode manifest, SemVer engine, String latestTag) {
+        List<ObjectNode> out = new ArrayList<>();
+        for (JsonNode item : manifest.path("items")) {
+            ObjectNode entry = itemEntry(fullName, tag, release, manifest, item, engine, latestTag);
+            if (entry != null) {
+                out.add(entry);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * One catalog entry for a collection item. The artifact is a repo-relative path fetched raw at
+     * the tag (content is XML — channels and code templates — so there is no zip or sha256 sidecar).
+     */
+    private ObjectNode itemEntry(String fullName, String tag, JsonNode release, JsonNode manifest, JsonNode item, SemVer engine, String latestTag) {
+        String id = item.path("id").asText("");
+        String type = item.path("type").asText("");
+        if (id.isEmpty() || type.isEmpty()) {
+            return null;
+        }
+        String fallbackVersion = manifest.path("version").asText(tag.replaceFirst("^[vV]", ""));
+        String min = item.path("minEngineVersion").asText(manifest.path("minEngineVersion").asText(""));
+        String max = item.path("maxEngineVersion").asText(manifest.path("maxEngineVersion").asText(""));
+
+        ObjectNode entry = MAPPER.createObjectNode();
+        entry.put("id", id);
+        entry.put("name", item.path("name").asText(id));
+        entry.put("description", item.path("description").asText(""));
+        entry.put("type", type);
+        entry.put("repo", fullName);
+        entry.put("tag", tag);
+        entry.put("version", item.path("version").asText(fallbackVersion));
+        entry.put("minEngineVersion", min);
+        entry.put("maxEngineVersion", max);
+        entry.put("compatible", SemVer.inRange(engine, SemVer.parse(min.isEmpty() ? null : min), SemVer.parse(max.isEmpty() ? null : max)));
+        entry.put("homepage", item.path("homepage").asText(manifest.path("homepage").asText("https://github.com/" + fullName)));
+        entry.put("documentation", item.path("documentation").asText(manifest.path("documentation").asText("")));
+        entry.put("storeDocs", item.path("storeDocs").asText(""));
+        entry.put("license", item.path("license").asText(manifest.path("license").asText("")));
+        entry.put("deprecated", item.path("deprecated").asBoolean(false));
+        entry.put("deprecationMessage", item.path("deprecationMessage").asText(""));
+        entry.put("publishedAt", release.path("published_at").asText(""));
+        entry.put("releaseUrl", release.path("html_url").asText(""));
+        entry.put("latestTag", latestTag);
+        entry.put("offeredIsLatest", tag.equals(latestTag));
+        entry.put("contentId", item.path("contentId").asText(""));
+
+        boolean binaryType = isBinaryType(type);
+        boolean contentType = isContentType(type);
+        entry.put("restartRequired", item.has("restartRequired") ? item.path("restartRequired").asBoolean(binaryType) : binaryType);
+        entry.put("installable", binaryType || contentType);
+
+        ArrayNode authors = entry.putArray("authors");
+        for (JsonNode a : (item.has("authors") ? item.path("authors") : manifest.path("authors"))) {
+            authors.add(a.asText());
+        }
+        ArrayNode keywords = entry.putArray("keywords");
+        for (JsonNode k : item.path("keywords")) {
+            keywords.add(k.asText());
+        }
+
+        String artifact = item.path("artifact").asText("");
+        String assetUrl = "";
+        if (!artifact.isEmpty() && !artifact.contains("..")) {
+            assetUrl = GitHubClient.RAW_BASE + "/" + fullName + "/" + tag + "/" + encodePath(artifact);
+        }
+        entry.put("assetName", artifact.isEmpty() ? "" : artifact.substring(artifact.lastIndexOf('/') + 1));
+        entry.put("assetUrl", assetUrl);
+        entry.put("checksumUrl", item.path("checksumUrl").asText(""));
+        return entry;
+    }
+
+    /** Percent-encode each segment of a repo path for a raw.githubusercontent.com URL (space -> %20). */
+    private static String encodePath(String path) {
+        String[] segments = path.split("/");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < segments.length; i++) {
+            if (i > 0) {
+                sb.append('/');
+            }
+            sb.append(URLEncoder.encode(segments[i], StandardCharsets.UTF_8).replace("+", "%20"));
+        }
+        return sb.toString();
     }
 
     private JsonNode fetchManifest(String fullName, String tag) throws Exception {
@@ -391,8 +489,10 @@ public class CatalogService {
         entry.put("releaseUrl", release.path("html_url").asText(""));
 
         boolean binaryType = isBinaryType(entry.path("type").asText());
+        boolean contentType = isContentType(entry.path("type").asText());
+        // Extensions need a restart; imported content (channels/code templates) takes effect immediately.
         entry.put("restartRequired", manifest.has("restartRequired") ? manifest.path("restartRequired").asBoolean(binaryType) : binaryType);
-        entry.put("installable", binaryType);
+        entry.put("installable", binaryType || contentType);
 
         ArrayNode authors = entry.putArray("authors");
         for (JsonNode author : manifest.path("authors")) {
@@ -441,12 +541,27 @@ public class CatalogService {
         return "plugin".equals(type) || "connector".equals(type) || "datatype".equals(type);
     }
 
+    /** Content types are imported through the engine's controllers, not the extension installer. */
+    public static boolean isContentType(String type) {
+        return "channel".equals(type) || "code-template-library".equals(type) || "code-template".equals(type);
+    }
+
     /** Deep-copies the cached catalog and stamps current installed/update state onto each entry. */
     private ObjectNode mergeInstalledState(ObjectNode catalog) {
         ObjectNode result = catalog.deepCopy();
         Map<String, String> installed = installedVersionsByPath();
+        Set<String> contentIds = installedContentIds();
         for (JsonNode node : result.withArray("entries")) {
             ObjectNode entry = (ObjectNode) node;
+            if (isContentType(entry.path("type").asText())) {
+                // Content is matched by the artifact's engine id (declared as contentId in the
+                // manifest); it has no comparable version, so we only surface installed/not-installed.
+                String contentId = entry.path("contentId").asText("");
+                boolean present = !contentId.isEmpty() && contentIds.contains(contentId);
+                entry.put("installedVersion", present ? entry.path("version").asText() : "");
+                entry.put("updateAvailable", false);
+                continue;
+            }
             String installedVersion = installed.get(entry.path("id").asText());
             entry.put("installedVersion", installedVersion == null ? "" : installedVersion);
             boolean updateAvailable = false;
@@ -475,6 +590,33 @@ public class CatalogService {
             }
         }
         return installed;
+    }
+
+    /**
+     * Ids of installed content the store can detect: channel ids, code template library ids, and
+     * code template ids. A content catalog entry is "installed" when its manifest contentId is here.
+     */
+    private Set<String> installedContentIds() {
+        Set<String> ids = new HashSet<>();
+        try {
+            ids.addAll(ControllerFactory.getFactory().createChannelController().getChannelIds());
+        } catch (Exception e) {
+            logger.warn("Community Store: could not read installed channel ids: " + e.getMessage());
+        }
+        try {
+            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
+            for (CodeTemplateLibrary library : controller.getLibraries(null, true)) {
+                ids.add(library.getId());
+                if (library.getCodeTemplates() != null) {
+                    for (CodeTemplate template : library.getCodeTemplates()) {
+                        ids.add(template.getId());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Community Store: could not read installed code template ids: " + e.getMessage());
+        }
+        return ids;
     }
 
     private ObjectNode sourceError(String source, String message) {

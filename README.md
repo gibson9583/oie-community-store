@@ -2,6 +2,20 @@
 
 A community plugin store for [Open Integration Engine](https://openintegrationengine.org), modeled on the HACS approach: no project-hosted infrastructure, just git. Publisher repositories and organizations are listed in a bundled sources file, each publisher describes releases with an `oie.json` manifest, installable artifacts are `.zip` assets on GitHub Releases, and the engine downloads, sha256-verifies, and installs them through its own extension installer.
 
+## Screenshots
+
+**Browse** — discover connectors, plugins, and data types resolved from GitHub Releases:
+
+![Browse the catalog](docs/images/browse.png)
+
+**Installed** — track what's installed and see available updates (including the store updating itself):
+
+![Installed extensions with updates](docs/images/installed.png)
+
+**Settings** — bundled and custom sources, a local blocklist, the beta channel, and an optional encrypted GitHub token:
+
+![Settings: sources, blocklist, GitHub access](docs/images/settings.png)
+
 ## Architecture
 
 This is a standard engine extension (Java backend) paired with a web administrator plugin (React frontend), shipped together in one extension zip.

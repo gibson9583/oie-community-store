@@ -155,6 +155,14 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
             if (tag != null && !tag.isBlank() && !tag.equals(entry.path("tag").asText())) {
                 throw new ClientException("The catalog now resolves '" + id + "' to " + entry.path("tag").asText() + " but the request pinned " + tag + ". Refresh and confirm again.");
             }
+            // A standalone code template is imported into a library the user chose in the
+            // install dialog: an existing library id, or a name for a new one.
+            if (body.has("targetLibraryId")) {
+                entry.put("targetLibraryId", body.path("targetLibraryId").asText(""));
+            }
+            if (body.has("newLibrary")) {
+                entry.put("newLibrary", body.path("newLibrary").asText(""));
+            }
             return plugin.getInstallService().install(entry, getCurrentUserId()).toString();
         } catch (ClientException e) {
             throw e;

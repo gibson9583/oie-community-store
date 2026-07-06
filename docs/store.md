@@ -7,6 +7,8 @@ are listed in a bundled source file; each publisher describes releases with an
 engine downloads, sha256-verifies, and installs it through its own extension
 installer.
 
+![Browsing the Community Store catalog](docs/images/browse.png)
+
 ## Features
 
 - **Browse** community connectors, plugins, and data types from GitHub Releases.

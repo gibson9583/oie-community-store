@@ -10,8 +10,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -22,7 +25,14 @@ import org.apache.logging.log4j.Logger;
 import org.w3c.dom.Document;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mirth.connect.model.Channel;
 import com.mirth.connect.model.ServerEvent;
+import com.mirth.connect.model.ServerEventContext;
+import com.mirth.connect.model.codetemplates.CodeTemplate;
+import com.mirth.connect.model.codetemplates.CodeTemplateLibrary;
+import com.mirth.connect.model.converters.ObjectXMLSerializer;
+import com.mirth.connect.server.controllers.ChannelController;
+import com.mirth.connect.server.controllers.CodeTemplateController;
 import com.mirth.connect.server.controllers.ConfigurationController;
 import com.mirth.connect.server.controllers.ControllerFactory;
 import com.mirth.connect.server.controllers.EventController;
@@ -62,15 +72,23 @@ public class InstallService {
         String checksumUrl = entry.path("checksumUrl").asText("");
         String assetName = entry.path("assetName").asText("");
 
+        String type = entry.path("type").asText("");
         try {
-            if (!CatalogService.isBinaryType(entry.path("type").asText())) {
-                throw new IOException("Type '" + entry.path("type").asText() + "' is not installable through the store yet.");
-            }
             if (!entry.path("compatible").asBoolean(false)) {
                 throw new IOException("Release " + tag + " is not compatible with this engine version.");
             }
             if (assetUrl.isEmpty()) {
-                throw new IOException("Release " + tag + " of " + repo + " has no unambiguous .zip asset. Publishers must attach exactly one zip or declare 'filename' in oie.json.");
+                throw new IOException("Release " + tag + " of " + repo + " has no installable artifact.");
+            }
+
+            // Channels and code templates aren't extensions — they're imported through the
+            // engine's controllers, take effect without a restart, and don't touch the
+            // extensions directory.
+            if (CatalogService.isContentType(type)) {
+                return installContent(entry, type, id, repo, tag, assetUrl, checksumUrl, userId);
+            }
+            if (!CatalogService.isBinaryType(type)) {
+                throw new IOException("Type '" + type + "' is not installable through the store.");
             }
             if (checksumUrl.isEmpty()) {
                 throw new IOException("Release " + tag + " of " + repo + " is missing the required " + assetName + ".sha256 checksum asset.");
@@ -104,6 +122,105 @@ public class InstallService {
             dispatchEvent(EVENT_FAILURE, userId, Map.of("extension", id, "repo", repo, "tag", tag, "error", String.valueOf(e.getMessage())), ServerEvent.Outcome.FAILURE);
             throw e;
         }
+    }
+
+    /**
+     * Imports a content artifact — a channel, code template library, or standalone code template —
+     * through the engine's controllers (not the extension installer). These take effect immediately
+     * (no restart) and live in the channel / code-template stores. For a standalone code template
+     * the caller supplies a target library on the entry: {@code targetLibraryId} to add to an
+     * existing library, or {@code newLibrary} to create one. A checksum is verified when present.
+     */
+    private ObjectNode installContent(ObjectNode entry, String type, String id, String repo, String tag,
+            String assetUrl, String checksumUrl, Integer userId) throws Exception {
+        byte[] artifact = gitHub.downloadAsset(assetUrl);
+        String actual = sha256Hex(artifact);
+        if (!checksumUrl.isEmpty()) {
+            String expected = parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8));
+            if (!actual.equalsIgnoreCase(expected)) {
+                throw new IOException("Checksum verification FAILED for " + id + ": expected " + expected + " but computed " + actual + ". Nothing was imported.");
+            }
+        }
+        String xml = new String(artifact, StandardCharsets.UTF_8);
+        ObjectXMLSerializer serializer = ObjectXMLSerializer.getInstance();
+        String imported;
+
+        if ("channel".equals(type)) {
+            Channel channel = serializer.deserialize(xml, Channel.class);
+            ChannelController controller = ControllerFactory.getFactory().createChannelController();
+            controller.updateChannel(channel, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true, null);
+            imported = "channel \"" + channel.getName() + "\"";
+        } else if ("code-template-library".equals(type)) {
+            CodeTemplateLibrary library = serializer.deserialize(xml, CodeTemplateLibrary.class);
+            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
+            // Persist each member template's content, then merge the library into the existing set.
+            if (library.getCodeTemplates() != null) {
+                for (CodeTemplate template : library.getCodeTemplates()) {
+                    controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+                }
+            }
+            List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+            libraries.removeIf(existing -> existing.getId().equals(library.getId()));
+            libraries.add(library);
+            controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+            imported = "code template library \"" + library.getName() + "\"";
+        } else if ("code-template".equals(type)) {
+            CodeTemplate template = serializer.deserialize(xml, CodeTemplate.class);
+            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
+            controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+
+            // A standalone template must belong to a library — the one the user chose.
+            List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+            String targetLibraryId = entry.path("targetLibraryId").asText("");
+            String newLibraryName = entry.path("newLibrary").asText("").trim();
+            CodeTemplateLibrary target = null;
+            for (CodeTemplateLibrary lib : libraries) {
+                if (lib.getId().equals(targetLibraryId)) {
+                    target = lib;
+                    break;
+                }
+            }
+            if (target == null) {
+                if (!targetLibraryId.isEmpty()) {
+                    throw new IOException("The selected code template library no longer exists. Refresh and choose again.");
+                }
+                target = new CodeTemplateLibrary();
+                target.setId(UUID.randomUUID().toString());
+                target.setName(newLibraryName.isEmpty() ? "Community Store" : newLibraryName);
+                target.setCodeTemplates(new ArrayList<>());
+                libraries.add(target);
+            }
+            List<CodeTemplate> members = target.getCodeTemplates();
+            if (members == null) {
+                members = new ArrayList<>();
+                target.setCodeTemplates(members);
+            }
+            boolean present = false;
+            for (CodeTemplate member : members) {
+                if (member.getId().equals(template.getId())) {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present) {
+                members.add(template);
+            }
+            controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+            imported = "code template \"" + template.getName() + "\" into library \"" + target.getName() + "\"";
+        } else {
+            throw new IOException("Unsupported content type: " + type);
+        }
+
+        dispatchEvent(EVENT_INSTALL, userId, Map.of("extension", id, "repo", repo, "tag", tag, "sha256", actual), ServerEvent.Outcome.SUCCESS);
+
+        ObjectNode response = entry.objectNode();
+        response.put("installed", true);
+        response.put("id", id);
+        response.put("tag", tag);
+        response.put("sha256", actual);
+        response.put("restartRequired", false);
+        response.put("imported", imported);
+        return response;
     }
 
     /** Marks an installed extension for uninstallation on next restart, via the engine's own path. */

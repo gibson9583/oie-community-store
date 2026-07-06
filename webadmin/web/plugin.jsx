@@ -67,9 +67,38 @@ const TYPE_LABELS = {
     connector: 'Connector',
     plugin: 'Plugin',
     datatype: 'Data Type',
-    'code-template-library': 'Code Templates',
     channel: 'Channel',
+    'code-template-library': 'Code Template Library',
+    'code-template': 'Code Template',
 };
+
+// Stable ordering for the type filter and the group-by-type sections.
+const TYPE_ORDER = ['connector', 'plugin', 'datatype', 'channel', 'code-template-library', 'code-template'];
+const typeRank = (t) => { const i = TYPE_ORDER.indexOf(t); return i < 0 ? TYPE_ORDER.length : i; };
+
+// Content types are imported (channels/code templates) rather than installed as extensions:
+// they take effect immediately, with no engine restart.
+const CONTENT_TYPES = ['channel', 'code-template-library', 'code-template'];
+const isContentType = (t) => CONTENT_TYPES.includes(t);
+
+// Normalize the engine's /codeTemplateLibraries response (XStream single-root + one-element-list
+// quirk) into a plain [{id, name}] list for the install-dialog library picker.
+function normalizeLibraries(resp) {
+    let node = resp && resp.list !== undefined ? resp.list : resp;
+    let arr = node && node.codeTemplateLibrary;
+    if (!arr) return [];
+    if (!Array.isArray(arr)) arr = [arr];
+    return arr.map((l) => ({ id: l && l.id, name: (l && l.name) || l.id })).filter((l) => l.id);
+}
+
+// Small persisted UI prefs (view mode, grouping), scoped to the store.
+function getPref(key, fallback) {
+    try { const v = localStorage.getItem('communitystore.' + key); return v === null ? fallback : v; }
+    catch (e) { return fallback; }
+}
+function setPref(key, value) {
+    try { localStorage.setItem('communitystore.' + key, value); } catch (e) { /* private mode */ }
+}
 
 function TypeTag({ type }) {
     return <span className="tag">{TYPE_LABELS[type] || type}</span>;
@@ -113,25 +142,55 @@ function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, bu
 function useStoreActions(refresh) {
     const [confirm, setConfirm] = React.useState(null); // { entry, mode }
     const [busy, setBusy] = React.useState(false);
+    // Code Template install: choose a target library (a standalone template must live in one).
+    const [libraries, setLibraries] = React.useState([]);
+    const [libMode, setLibMode] = React.useState('new'); // 'new' | 'existing'
+    const [newLib, setNewLib] = React.useState('');
+    const [existingLib, setExistingLib] = React.useState('');
 
-    const requestInstall = (entry) => setConfirm({ entry, mode: 'install' });
+    const requestInstall = async (entry) => {
+        setConfirm({ entry, mode: 'install' });
+        if (entry.type === 'code-template') {
+            setLibMode('new');
+            setNewLib(entry.name || 'Community Store');
+            setExistingLib('');
+            setLibraries([]);
+            try { setLibraries(normalizeLibraries(await apiGet('/codeTemplateLibraries'))); }
+            catch (e) { setLibraries([]); } // fall back to create-new only
+        }
+    };
     const requestUninstall = (entry) => setConfirm({ entry, mode: 'uninstall' });
 
     const execute = async () => {
         if (!confirm) return;
+        const entry = confirm.entry;
+        const content = isContentType(entry.type);
         setBusy(true);
         try {
             if (confirm.mode === 'install') {
-                await apiPost(`${BASE}/_install`, { id: confirm.entry.id, tag: confirm.entry.tag });
-                toast(`Installed ${confirm.entry.name} ${confirm.entry.version}. Restart the engine to activate it.`, 'success');
+                const body = { id: entry.id, tag: entry.tag };
+                if (entry.type === 'code-template') {
+                    if (libMode === 'existing') {
+                        if (!existingLib) { toast('Choose a library to add this code template to.', 'warn'); setBusy(false); return; }
+                        body.targetLibraryId = existingLib;
+                    } else {
+                        body.newLibrary = (newLib || '').trim() || 'Community Store';
+                    }
+                }
+                await apiPost(`${BASE}/_install`, body);
+                toast(content
+                    ? `Imported ${entry.name}. It's available now.`
+                    : `Installed ${entry.name} ${entry.version}. Restart the engine to activate it.`, 'success');
+                // Extensions need a restart (shell's staged → Reload UI banner); imported
+                // content takes effect immediately, so no restart prompt.
+                if (!content) {
+                    try { window.dispatchEvent(new Event('webadmin:restart-pending')); } catch (e) { /* non-browser */ }
+                }
             } else {
-                await apiPost(`${BASE}/_uninstall`, { id: confirm.entry.id });
-                toast(`${confirm.entry.name} will be uninstalled on the next engine restart.`, 'success');
+                await apiPost(`${BASE}/_uninstall`, { id: entry.id });
+                toast(`${entry.name} will be uninstalled on the next engine restart.`, 'success');
+                try { window.dispatchEvent(new Event('webadmin:restart-pending')); } catch (e) { /* non-browser */ }
             }
-            // Trigger the shell's global restart banner — the same "extension change
-            // staged → watching for the engine → Reload UI" flow the Extensions screen
-            // uses (bridges.jsx useRestartWatch listens for this event).
-            try { window.dispatchEvent(new Event('webadmin:restart-pending')); } catch (e) { /* non-browser */ }
             setConfirm(null);
             await refresh(false);
         } catch (e) {
@@ -141,34 +200,66 @@ function useStoreActions(refresh) {
         }
     };
 
-    const overlay = confirm ? (
-        <ConfirmOverlay
-            title={confirm.mode === 'install' ? `Install ${confirm.entry.name}?` : `Uninstall ${confirm.entry.name}?`}
-            confirmLabel={confirm.mode === 'install' ? `Install ${confirm.entry.version}` : 'Uninstall'}
-            busy={busy}
-            onCancel={() => setConfirm(null)}
-            onConfirm={execute}>
-            {confirm.mode === 'install' ? (
-                <div>
+    let overlay = null;
+    if (confirm) {
+        const entry = confirm.entry;
+        const content = isContentType(entry.type);
+        const isCodeTemplate = entry.type === 'code-template';
+        overlay = (
+            <ConfirmOverlay
+                title={confirm.mode === 'install' ? `${content ? 'Import' : 'Install'} ${entry.name}?` : `Uninstall ${entry.name}?`}
+                confirmLabel={confirm.mode === 'install' ? (content ? 'Import' : `Install ${entry.version}`) : 'Uninstall'}
+                busy={busy}
+                onCancel={() => setConfirm(null)}
+                onConfirm={execute}>
+                {confirm.mode === 'install' ? (
+                    <div>
+                        {content ? (
+                            <p>
+                                Imports the {TYPE_LABELS[entry.type] || entry.type} <strong>{entry.name}</strong> from{' '}
+                                <span className="mono">{entry.repo}</span> ({entry.tag}). It takes effect immediately — no engine restart.
+                            </p>
+                        ) : (
+                            <p>
+                                This installs <span className="mono">{entry.repo}</span> release{' '}
+                                <span className="mono">{entry.tag}</span> into the engine's extensions directory after sha256 verification.
+                            </p>
+                        )}
+                        {isCodeTemplate ? (
+                            <div className="mt-3">
+                                <div className="text-text-dim mb-1">Add to library:</div>
+                                <label className="flex items-center gap-2 mb-1" style={{ cursor: 'pointer' }}>
+                                    <input type="radio" name="cs-lib" checked={libMode === 'new'} onChange={() => setLibMode('new')} />
+                                    Create new library:
+                                    <input className="field" style={{ maxWidth: 220 }} value={newLib} placeholder="Library name"
+                                        onFocus={() => setLibMode('new')} onChange={(e) => setNewLib(e.target.value)} />
+                                </label>
+                                <label className="flex items-center gap-2" style={{ cursor: libraries.length ? 'pointer' : 'default' }}>
+                                    <input type="radio" name="cs-lib" checked={libMode === 'existing'} disabled={!libraries.length} onChange={() => setLibMode('existing')} />
+                                    Existing library:
+                                    <select className="field" style={{ maxWidth: 220 }} value={existingLib} disabled={!libraries.length}
+                                        onChange={(e) => { setExistingLib(e.target.value); setLibMode('existing'); }}>
+                                        <option value="">{libraries.length ? 'Select a library…' : 'No libraries yet'}</option>
+                                        {libraries.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        ) : null}
+                        <p className="hint mt-2">
+                            Community content is published by third parties and is not vetted by the Open
+                            Integration Engine project. Installing runs its code in the engine. Install only
+                            from publishers you trust.
+                        </p>
+                    </div>
+                ) : (
                     <p>
-                        This installs <span className="mono">{confirm.entry.repo}</span> release{' '}
-                        <span className="mono">{confirm.entry.tag}</span> into the engine's extensions
-                        directory after sha256 verification.
+                        The extension <span className="mono">{entry.id}</span> will be marked for
+                        removal and uninstalled on the next engine restart.
                     </p>
-                    <p className="hint mt-2">
-                        Community content is published by third parties and is not vetted by the
-                        Open Integration Engine project. Installing an extension runs its code in
-                        the engine. Install only from publishers you trust.
-                    </p>
-                </div>
-            ) : (
-                <p>
-                    The extension <span className="mono">{confirm.entry.id}</span> will be marked for
-                    removal and uninstalled on the next engine restart.
-                </p>
-            )}
-        </ConfirmOverlay>
-    ) : null;
+                )}
+            </ConfirmOverlay>
+        );
+    }
 
     return { requestInstall, requestUninstall, overlay };
 }
@@ -270,15 +361,17 @@ function DetailView({ entry, onBack, actions }) {
                         </tbody>
                     </table>
                     <div className="flex gap-2 mt-4">
-                        {entry.installable && entry.compatible && (!entry.installedVersion || entry.updateAvailable) ? (
+                        {entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
                             <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>
-                                {entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`}
+                                {isContentType(entry.type)
+                                    ? (entry.installedVersion ? 'Re-import' : 'Import')
+                                    : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
                             </button>
                         ) : null}
                         {!entry.installable ? (
-                            <span className="hint">This content type is not installable through the store yet.</span>
+                            <span className="hint">This type is not installable through the store yet.</span>
                         ) : null}
-                        {entry.installedVersion ? (
+                        {entry.installedVersion && !isContentType(entry.type) ? (
                             <button className="btn" onClick={() => actions.requestUninstall(entry)}>Uninstall</button>
                         ) : null}
                         {entry.documentation ? (
@@ -300,9 +393,64 @@ function DetailView({ entry, onBack, actions }) {
 /* Browse view                                                         */
 /* ------------------------------------------------------------------ */
 
+function EntryCard({ entry, onSelect }) {
+    return (
+        <div className="panel" style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
+            <div className="panel-body">
+                <div className="flex items-center gap-2">
+                    <strong>{entry.name}</strong>
+                    <span className="mono text-text-dim">{entry.version}</span>
+                    <TypeTag type={entry.type} />
+                </div>
+                <div className="text-text-dim mt-1" style={{ minHeight: '2.5em' }}>
+                    {entry.description ? (entry.description.length > 140 ? entry.description.slice(0, 140) + '…' : entry.description) : ''}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                    <span className="mono text-text-dim text-[12px]">{entry.repo}</span>
+                </div>
+                <div className="mt-2"><Badges entry={entry} /></div>
+            </div>
+        </div>
+    );
+}
+
+function CardsGrid({ entries, onSelect }) {
+    return (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {entries.map((entry) => <EntryCard key={entry.id} entry={entry} onSelect={onSelect} />)}
+        </div>
+    );
+}
+
+function EntryTable({ entries, onSelect }) {
+    return (
+        <table className="dt">
+            <thead>
+                <tr><th>Name</th><th>Type</th><th>Version</th><th>Repository</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {entries.map((entry) => (
+                    <tr key={entry.id} style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
+                        <td><a className="text-accent">{entry.name}</a></td>
+                        <td><TypeTag type={entry.type} /></td>
+                        <td className="mono">{entry.version}</td>
+                        <td className="mono text-text-dim">{entry.repo}</td>
+                        <td><Badges entry={entry} /></td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
 function BrowseView({ catalog, onSelect }) {
     const [search, setSearch] = React.useState('');
     const [typeFilter, setTypeFilter] = React.useState('');
+    const [viewMode, setViewMode] = React.useState(() => getPref('view', 'cards'));
+    const [groupByType, setGroupByType] = React.useState(() => getPref('group', '0') === '1');
+
+    const setView = (v) => { setViewMode(v); setPref('view', v); };
+    const setGroup = (g) => { setGroupByType(g); setPref('group', g ? '1' : '0'); };
 
     const entries = (catalog.entries || []).filter((entry) => {
         if (typeFilter && entry.type !== typeFilter) return false;
@@ -311,46 +459,55 @@ function BrowseView({ catalog, onSelect }) {
         return haystack.includes(search.toLowerCase());
     });
 
-    const types = [...new Set((catalog.entries || []).map((e) => e.type))].sort();
+    const types = [...new Set((catalog.entries || []).map((e) => e.type))]
+        .sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b));
+
+    const render = (list) => viewMode === 'table'
+        ? <EntryTable entries={list} onSelect={onSelect} />
+        : <CardsGrid entries={list} onSelect={onSelect} />;
 
     return (
         <div>
-            <div className="flex gap-2 items-center mb-3">
+            <div className="flex gap-2 items-center mb-3 flex-wrap">
                 <input className="field" style={{ maxWidth: 320 }} placeholder="Search name, description, keywords…"
                     value={search} onChange={(e) => setSearch(e.target.value)} />
                 <select className="field" style={{ maxWidth: 200 }} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
                     <option value="">All types</option>
                     {types.map((t) => <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>)}
                 </select>
-                <span className="text-text-dim">{entries.length} of {(catalog.entries || []).length} extension(s)</span>
+                <span className="text-text-dim">{entries.length} of {(catalog.entries || []).length} item(s)</span>
+                <div className="ml-auto flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-text-dim" style={{ cursor: 'pointer' }}>
+                        <input type="checkbox" checked={groupByType} onChange={(e) => setGroup(e.target.checked)} />
+                        Group by type
+                    </label>
+                    <div className="flex">
+                        <button className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : ''}`} onClick={() => setView('cards')}>Cards</button>
+                        <button className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : ''}`} onClick={() => setView('table')}>Table</button>
+                    </div>
+                </div>
             </div>
 
             {entries.length === 0 ? (
                 <div className="panel"><div className="panel-body text-text-dim">
-                    No extensions match. Sources may still be syncing, or none are configured; check Settings.
+                    No items match. Sources may still be syncing, or none are configured; check Settings.
                 </div></div>
-            ) : (
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                    {entries.map((entry) => (
-                        <div key={entry.id} className="panel" style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
-                            <div className="panel-body">
-                                <div className="flex items-center gap-2">
-                                    <strong>{entry.name}</strong>
-                                    <span className="mono text-text-dim">{entry.version}</span>
-                                    <TypeTag type={entry.type} />
+            ) : groupByType ? (
+                <div className="flex flex-col gap-4">
+                    {types.filter((t) => entries.some((e) => e.type === t)).map((t) => {
+                        const group = entries.filter((e) => e.type === t);
+                        return (
+                            <div key={t}>
+                                <div className="flex items-center gap-2 py-1.5 border-b border-line mb-2">
+                                    <span className="font-semibold">{TYPE_LABELS[t] || t}</span>
+                                    <span className="text-text-faint text-[12px]">{group.length}</span>
                                 </div>
-                                <div className="text-text-dim mt-1" style={{ minHeight: '2.5em' }}>
-                                    {entry.description ? (entry.description.length > 140 ? entry.description.slice(0, 140) + '…' : entry.description) : ''}
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className="mono text-text-dim" style={{ fontSize: '0.85em' }}>{entry.repo}</span>
-                                </div>
-                                <div className="mt-2"><Badges entry={entry} /></div>
+                                {render(group)}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
-            )}
+            ) : render(entries)}
         </div>
     );
 }
@@ -384,7 +541,9 @@ function InstalledView({ catalog, onSelect, actions }) {
                             {entry.updateAvailable ? (
                                 <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>Update</button>
                             ) : null}
-                            <button className="btn" onClick={() => actions.requestUninstall(entry)}>Uninstall</button>
+                            {isContentType(entry.type)
+                                ? <span className="hint">Manage in {TYPE_LABELS[entry.type] === 'Channel' ? 'Channels' : 'Code Templates'}</span>
+                                : <button className="btn" onClick={() => actions.requestUninstall(entry)}>Uninstall</button>}
                         </td>
                     </tr>
                 ))}
