@@ -422,23 +422,55 @@ function CardsGrid({ entries, onSelect }) {
     );
 }
 
+function EntryRow({ entry, onSelect }) {
+    return (
+        <tr style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
+            <td><a className="text-accent">{entry.name}</a></td>
+            <td><TypeTag type={entry.type} /></td>
+            <td className="mono">{entry.version}</td>
+            <td className="mono text-text-dim">{entry.repo}</td>
+            <td><Badges entry={entry} /></td>
+        </tr>
+    );
+}
+
+// Shared column widths so every table (grouped or not) lines up identically.
+const TABLE_COLS = (
+    <colgroup>
+        <col /><col style={{ width: 170 }} /><col style={{ width: 110 }} /><col style={{ width: 320 }} /><col style={{ width: 170 }} />
+    </colgroup>
+);
+const TABLE_HEAD = <thead><tr><th>Name</th><th>Type</th><th>Version</th><th>Repository</th><th>Status</th></tr></thead>;
+
 function EntryTable({ entries, onSelect }) {
     return (
         <table className="dt">
-            <thead>
-                <tr><th>Name</th><th>Type</th><th>Version</th><th>Repository</th><th>Status</th></tr>
-            </thead>
+            {TABLE_COLS}
+            {TABLE_HEAD}
             <tbody>
-                {entries.map((entry) => (
-                    <tr key={entry.id} style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
-                        <td><a className="text-accent">{entry.name}</a></td>
-                        <td><TypeTag type={entry.type} /></td>
-                        <td className="mono">{entry.version}</td>
-                        <td className="mono text-text-dim">{entry.repo}</td>
-                        <td><Badges entry={entry} /></td>
-                    </tr>
-                ))}
+                {entries.map((entry) => <EntryRow key={entry.id} entry={entry} onSelect={onSelect} />)}
             </tbody>
+        </table>
+    );
+}
+
+// One table with a header row per type — keeps all columns aligned across groups.
+function GroupedTable({ groups, onSelect }) {
+    return (
+        <table className="dt">
+            {TABLE_COLS}
+            {TABLE_HEAD}
+            {groups.map(({ type, entries }) => (
+                <tbody key={type}>
+                    <tr className="group-row">
+                        <td colSpan={5}>
+                            <span className="font-semibold">{TYPE_LABELS[type] || type}</span>{' '}
+                            <span className="text-text-faint text-[12px]">{entries.length}</span>
+                        </td>
+                    </tr>
+                    {entries.map((entry) => <EntryRow key={entry.id} entry={entry} onSelect={onSelect} />)}
+                </tbody>
+            ))}
         </table>
     );
 }
@@ -493,20 +525,28 @@ function BrowseView({ catalog, onSelect }) {
                     No items match. Sources may still be syncing, or none are configured; check Settings.
                 </div></div>
             ) : groupByType ? (
-                <div className="flex flex-col gap-4">
-                    {types.filter((t) => entries.some((e) => e.type === t)).map((t) => {
-                        const group = entries.filter((e) => e.type === t);
-                        return (
-                            <div key={t}>
-                                <div className="flex items-center gap-2 py-1.5 border-b border-line mb-2">
-                                    <span className="font-semibold">{TYPE_LABELS[t] || t}</span>
-                                    <span className="text-text-faint text-[12px]">{group.length}</span>
+                (() => {
+                    const groups = types
+                        .filter((t) => entries.some((e) => e.type === t))
+                        .map((t) => ({ type: t, entries: entries.filter((e) => e.type === t) }));
+                    // Table mode: one shared table with per-type header rows, so columns align.
+                    if (viewMode === 'table') {
+                        return <GroupedTable groups={groups} onSelect={onSelect} />;
+                    }
+                    return (
+                        <div className="flex flex-col gap-4">
+                            {groups.map(({ type, entries: group }) => (
+                                <div key={type}>
+                                    <div className="flex items-center gap-2 py-1.5 border-b border-line mb-2">
+                                        <span className="font-semibold">{TYPE_LABELS[type] || type}</span>
+                                        <span className="text-text-faint text-[12px]">{group.length}</span>
+                                    </div>
+                                    <CardsGrid entries={group} onSelect={onSelect} />
                                 </div>
-                                {render(group)}
-                            </div>
-                        );
-                    })}
-                </div>
+                            ))}
+                        </div>
+                    );
+                })()
             ) : render(entries)}
         </div>
     );
