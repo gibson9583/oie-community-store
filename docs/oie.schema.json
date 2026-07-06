@@ -1,0 +1,92 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://openintegrationengine.org/community-store/oie.schema.json",
+    "title": "OIE Community Store manifest (oie.json)",
+    "description": "Per-release manifest that describes an extension to the OIE Community Store. Lives at the repository root and is read at each release tag, so its values are version-specific.",
+    "type": "object",
+    "required": ["schemaVersion", "id", "name", "type", "version"],
+    "additionalProperties": true,
+    "properties": {
+        "schemaVersion": {
+            "description": "Manifest schema version. Currently 1.",
+            "type": "integer",
+            "const": 1
+        },
+        "id": {
+            "description": "Stable extension id. MUST equal the 'path' attribute of the extension's plugin.xml. Used to match store records against the engine's installed inventory for update detection.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "name": {
+            "description": "Human-readable display name shown in the store.",
+            "type": "string",
+            "minLength": 1
+        },
+        "description": {
+            "description": "One or two sentences describing what the extension does.",
+            "type": "string"
+        },
+        "type": {
+            "description": "Extension category. connector, plugin, and datatype are installable through the store today; code-template-library and channel are listed but not yet installable.",
+            "type": "string",
+            "enum": ["connector", "plugin", "datatype", "code-template-library", "channel"]
+        },
+        "version": {
+            "description": "Extension version. MUST equal the release tag, modulo an optional leading 'v' (tag v1.4.0 -> version 1.4.0). Semantic-versioning comparable, so the store can detect updates.",
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)*([.-].+)?$"
+        },
+        "minEngineVersion": {
+            "description": "Lowest engine version this release supports (inclusive). Omit or null for no lower bound.",
+            "type": ["string", "null"]
+        },
+        "maxEngineVersion": {
+            "description": "Highest engine version this release supports (inclusive). Omit or null for no upper bound.",
+            "type": ["string", "null"]
+        },
+        "filename": {
+            "description": "Name of the release asset to install. Optional: if omitted, the store uses the single .zip asset on the release. Supports a {version} placeholder, e.g. 'sqs-connector-{version}.zip'.",
+            "type": "string"
+        },
+        "restartRequired": {
+            "description": "Whether activating the extension needs an engine restart. Defaults to true for installable (binary) types.",
+            "type": "boolean"
+        },
+        "homepage": {
+            "description": "Project homepage. Defaults to the GitHub repository URL.",
+            "type": "string",
+            "format": "uri"
+        },
+        "documentation": {
+            "description": "External documentation URL, surfaced as a 'Documentation' button.",
+            "type": "string",
+            "format": "uri"
+        },
+        "storeDocs": {
+            "description": "Repo-relative path to the markdown rendered in the store detail view. Optional; if omitted the store looks for store.md, docs/store.md, then README.md. Must be a relative path (no leading '/', no '..').",
+            "type": "string"
+        },
+        "license": {
+            "description": "SPDX license identifier, e.g. MPL-2.0 or Apache-2.0.",
+            "type": "string"
+        },
+        "authors": {
+            "description": "Author or maintainer names.",
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "keywords": {
+            "description": "Search/filter keywords.",
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "deprecated": {
+            "description": "Marks the extension as deprecated; the store shows a Deprecated badge.",
+            "type": "boolean"
+        },
+        "deprecationMessage": {
+            "description": "Optional explanation shown when deprecated is true (e.g. a replacement to use instead).",
+            "type": "string"
+        }
+    }
+}

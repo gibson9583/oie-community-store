@@ -1,0 +1,19 @@
+{
+    "schemaVersion": 1,
+    "id": "sqs-connector",
+    "name": "SQS Source Connector",
+    "description": "Consume messages from Amazon SQS queues as a channel source.",
+    "type": "connector",
+    "version": "1.4.0",
+    "minEngineVersion": "4.5.0",
+    "maxEngineVersion": null,
+    "filename": "sqs-connector-{version}.zip",
+    "restartRequired": true,
+    "homepage": "https://github.com/acme-health/oie-sqs-connector",
+    "documentation": "https://github.com/acme-health/oie-sqs-connector/wiki",
+    "storeDocs": "docs/store.md",
+    "license": "MPL-2.0",
+    "authors": ["Acme Health Integration Team"],
+    "keywords": ["aws", "sqs", "queue", "source"],
+    "deprecated": false
+}

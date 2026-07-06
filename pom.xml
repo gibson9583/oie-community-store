@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.openintegrationengine.plugins</groupId>
+    <artifactId>communitystore</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <name>OIE Community Store</name>
+    <description>Community plugin store for Open Integration Engine: GitHub-releases-backed discovery, verification, and installation.</description>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Point at an OIE installation (or a built engine tree) that provides the engine jars. -->
+        <oie.home>${env.OIE_HOME}</oie.home>
+    </properties>
+
+    <dependencies>
+        <!-- Engine jars: provided by the running engine, sourced from an install for compilation. -->
+        <dependency>
+            <groupId>com.mirth.connect</groupId>
+            <artifactId>mirth-server</artifactId>
+            <version>4.6.0</version>
+            <scope>system</scope>
+            <systemPath>${oie.home}/server-lib/mirth-server.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>com.mirth.connect</groupId>
+            <artifactId>mirth-client-core</artifactId>
+            <version>4.6.0</version>
+            <scope>system</scope>
+            <systemPath>${oie.home}/server-lib/mirth-client-core.jar</systemPath>
+        </dependency>
+        <!-- Transitively referenced engine jars needed at compile time (Encryptor via
+             ConfigurationController.getEncryptor(); donkey Event as ServerEvent's supertype). -->
+        <dependency>
+            <groupId>com.mirth.commons</groupId>
+            <artifactId>mirth-crypto</artifactId>
+            <version>4.6.0</version>
+            <scope>system</scope>
+            <systemPath>${oie.home}/server-lib/mirth-crypto.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>com.mirth.connect</groupId>
+            <artifactId>donkey-model</artifactId>
+            <version>4.6.0</version>
+            <scope>system</scope>
+            <systemPath>${oie.home}/server-lib/donkey/donkey-model.jar</systemPath>
+        </dependency>
+
+        <!-- APIs present on the engine classpath at runtime; compile against Central copies. -->
+        <dependency>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
+            <version>2.1.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <version>4.0.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.14.3</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.20.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations</artifactId>
+            <version>2.2.15</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>communitystore-shared</finalName>
+        <plugins>
+            <!-- Build the web administrator half (webadmin/web/plugin.jsx -> plugin.js) during package. -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>1.15.1</version>
+                <configuration>
+                    <workingDirectory>webadmin</workingDirectory>
+                    <installDirectory>${project.build.directory}</installDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>install-node-and-npm</goal></goals>
+                        <configuration><nodeVersion>v20.18.0</nodeVersion></configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-install</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>npm</goal></goals>
+                        <configuration><arguments>install</arguments></configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-build-webadmin</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>npm</goal></goals>
+                        <configuration><arguments>run build</arguments></configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Assemble the installable extension zip: communitystore/{plugin.xml, jar, webadmin}. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/extension-zip.xml</descriptor>
+                    </descriptors>
+                    <finalName>communitystore-${project.version}</finalName>
+                    <appendAssemblyId>false</appendAssemblyId>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>extension-zip</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

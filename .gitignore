@@ -1,0 +1,14 @@
+# Maven build output
+/target/
+
+# Assembled extension zips (produced by `mvn package`)
+/communitystore-*.zip
+/oie-community-store.zip
+
+# Web frontend
+webadmin/node_modules/
+webadmin/node/
+
+# OS / editor
+.DS_Store
+*.swp

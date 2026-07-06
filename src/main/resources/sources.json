@@ -1,0 +1,20 @@
+{
+    "schemaVersion": 1,
+    "comment": "Bundled default sources for the OIE Community Store. 'repo' entries point at a single repository; 'org' entries include every public repository in the organization carrying the topic (default 'oie-plugin'). Update via PR to this repository. Administrators can add custom sources at runtime in the store's Settings tab; the bundled blocklist always applies.",
+    "sources": [
+        {
+            "kind": "org",
+            "org": "OpenIntegrationEngine",
+            "topic": "oie-plugin"
+        },
+        {
+            "kind": "repo",
+            "repo": "gibson9583/oie-community-store"
+        },
+        {
+            "kind": "repo",
+            "repo": "gibson9583/sqs-source-connector"
+        }
+    ],
+    "blocklist": []
+}

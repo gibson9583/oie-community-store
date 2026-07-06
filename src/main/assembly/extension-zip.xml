@@ -1,0 +1,27 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.1"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.1 http://maven.apache.org/xsd/assembly-2.1.1.xsd">
+    <id>extension</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <files>
+        <file>
+            <source>plugin.xml</source>
+            <outputDirectory>communitystore</outputDirectory>
+        </file>
+        <file>
+            <source>${project.build.directory}/communitystore-shared.jar</source>
+            <outputDirectory>communitystore</outputDirectory>
+        </file>
+        <file>
+            <source>webadmin/plugin.json</source>
+            <outputDirectory>communitystore/webadmin</outputDirectory>
+        </file>
+        <file>
+            <source>webadmin/web/plugin.js</source>
+            <outputDirectory>communitystore/webadmin/web</outputDirectory>
+        </file>
+    </files>
+</assembly>

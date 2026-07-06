@@ -1,0 +1,73 @@
+# Example GitHub Actions workflow for publishing an OIE Community Store extension.
+#
+# Copy to .github/workflows/release.yml in your extension repository. On every
+# semver tag push (e.g. `git tag v1.4.0 && git push origin v1.4.0`) it builds the
+# extension zip, generates the required .sha256 sidecar, and attaches both to a
+# GitHub Release. The store discovers the release automatically.
+#
+# Prerequisites the store enforces, which this workflow satisfies:
+#   * the release has exactly one installable .zip asset (or a name matching
+#     `filename` in oie.json);
+#   * that .zip has a sibling `<name>.zip.sha256` checksum asset;
+#   * oie.json at the repo root has `version` equal to the tag (minus a leading v).
+
+name: Release extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write        # required to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Derive the version from the tag and fail fast if oie.json disagrees.
+      - name: Resolve and verify version
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          MANIFEST_VERSION="$(jq -r .version oie.json)"
+          if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag $TAG implies version $VERSION but oie.json says $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "asset=$(jq -r --arg v "$VERSION" '.filename // ("" ) | gsub("\\{version\\}"; $v)' oie.json)" >> "$GITHUB_OUTPUT"
+
+      # Build your extension zip however your project builds it. The result must be
+      # a real engine extension zip (single top-level folder containing plugin.xml,
+      # whose `path` attribute equals `id` in oie.json). Replace this step.
+      - name: Build extension zip
+        run: |
+          # e.g. mvn -B package, or ant dist, etc.
+          ./build.sh
+          # Ensure the produced file matches oie.json `filename` (or is the only .zip).
+          ls -1 dist/*.zip
+
+      - name: Stage the release asset and checksum
+        id: pkg
+        run: |
+          mkdir -p out
+          ASSET="${{ steps.ver.outputs.asset }}"
+          # Fall back to the single built zip when `filename` is not declared.
+          if [ -z "$ASSET" ]; then ASSET="$(basename "$(ls -1 dist/*.zip | head -n1)")"; fi
+          cp "dist/$ASSET" "out/$ASSET"
+          ( cd out && sha256sum "$ASSET" > "$ASSET.sha256" )
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/${{ steps.pkg.outputs.asset }}
+            out/${{ steps.pkg.outputs.asset }}.sha256
+          # Mark pre-releases (e.g. v1.4.0-rc1) so they only appear when a store
+          # administrator has enabled the beta channel.
+          prerelease: ${{ contains(github.ref_name, '-') }}

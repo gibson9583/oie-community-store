@@ -1,0 +1,102 @@
+# Publishes the Community Store to GitHub Releases so it can update itself through
+# the store (the store lists its own repo as a source). Trigger with a semver tag:
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# The tag drives the version stamped into the pom (zip name), plugin.xml
+# (pluginVersion — what the engine reports as "installed", so self-update detection
+# is accurate), and webadmin/plugin.json. oie.json is verified to match the tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write        # required to create the GitHub Release
+
+env:
+  OIE_TAG: v4.6.0-rc1
+  OIE_TARBALL: oie_unix_4_6_0-rc1.tar.gz
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve and verify version
+        id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(jq -r .version oie.json)"; MANIFEST_VERSION="${MANIFEST_VERSION#v}"
+          if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} implies version $VERSION but oie.json says $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Stamp the tag version everywhere the artifact reports it, so installed
+      # (plugin.xml) == offered (oie.json) and self-update detection is correct.
+      - name: Stamp version
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          sed -i "s|<pluginVersion>[^<]*</pluginVersion>|<pluginVersion>${VERSION}</pluginVersion>|" plugin.xml
+          sed -i "s|\"version\":[[:space:]]*\"[^\"]*\"|\"version\": \"${VERSION}\"|" webadmin/plugin.json
+
+      - name: Cache OIE distribution
+        id: oie-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OIE_TARBALL }}
+          key: oie-dist-${{ env.OIE_TAG }}
+
+      - name: Download OIE distribution (engine jars)
+        if: steps.oie-cache.outputs.cache-hit != 'true'
+        run: curl -fSL -o "$OIE_TARBALL" "https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}/${OIE_TARBALL}"
+
+      - name: Extract engine jars and set OIE_HOME
+        run: |
+          tar xzf "$OIE_TARBALL"
+          test -f "$GITHUB_WORKSPACE/oie/server-lib/mirth-server.jar"
+          echo "OIE_HOME=$GITHUB_WORKSPACE/oie" >> "$GITHUB_ENV"
+
+      - name: Build extension
+        run: mvn -B -ntp -DskipTests package
+
+      - name: Stage the release asset and checksum
+        id: pkg
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          SRC="$(find target -maxdepth 1 -name 'communitystore-*.zip' | head -n1)"
+          if [ -z "$SRC" ]; then
+            echo "::error::No communitystore zip found in target/"; ls -l target || true; exit 1
+          fi
+          ASSET="communitystore-${VERSION}.zip"
+          mkdir -p out
+          cp "$SRC" "out/${ASSET}"
+          ( cd out && sha256sum "${ASSET}" > "${ASSET}.sha256" )
+          echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/${{ steps.pkg.outputs.asset }}
+            out/${{ steps.pkg.outputs.asset }}.sha256
+          prerelease: ${{ contains(github.ref_name, '-') }}

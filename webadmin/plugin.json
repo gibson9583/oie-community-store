@@ -1,0 +1,10 @@
+{
+    "id": "community-store",
+    "name": "Community Store",
+    "version": "0.1.0",
+    "author": "Chris Gibson",
+    "description": "Browse, install, and update community plugins from GitHub releases, verified and installed by the engine under the manage-extensions permission.",
+    "enabled": true,
+    "oie": { "apiMin": "4.6" },
+    "client": { "entry": "web/plugin.js" }
+}
