@@ -83,6 +83,9 @@ public class CatalogService {
             ObjectNode fresh = buildCatalog();
             cachedCatalog = fresh;
             cachedAtMillis = System.currentTimeMillis();
+            // Docs at branch-based docsUrls are mutable — drop cached pages whenever the
+            // catalog rebuilds so a publisher's doc fix shows up on the next sync.
+            docsCache.clear();
             return mergeInstalledState(fresh);
         }
     }
@@ -137,7 +140,7 @@ public class CatalogService {
             String base = docsUrl.substring(0, docsUrl.lastIndexOf('/') + 1);
             String markdown = gitHub.getRawText(docsUrl);
             if (markdown != null) {
-                fillDocsResult(result, markdown, docsUrl.substring(docsUrl.lastIndexOf('/') + 1), base, base, base);
+                fillDocsResult(result, markdown, docsUrl.substring(docsUrl.lastIndexOf('/') + 1), base, base, base, null);
             }
             docsCache.put(cacheKey, result);
             return result;
@@ -159,7 +162,12 @@ public class CatalogService {
             // folders with spaces (e.g. "Code Templates/…") form a valid URL.
             String markdown = gitHub.getRawText(rawBase + encodePath(path));
             if (markdown != null) {
-                fillDocsResult(result, markdown, path, rawBase, blobBase, rawBase);
+                // Relative links/images resolve against the DOC'S OWN FOLDER — the same
+                // semantics GitHub uses when rendering the file — with a repo-root
+                // fallback for images in docs authored to the old root-relative rule.
+                String dir = path.contains("/") ? path.substring(0, path.lastIndexOf('/') + 1) : "";
+                String docRaw = rawBase + encodePath(dir);
+                fillDocsResult(result, markdown, path, docRaw, blobBase + encodePath(dir), docRaw, rawBase);
                 break;
             }
         }
@@ -173,7 +181,7 @@ public class CatalogService {
      * (the admin's CSP allows img-src 'self' data: only, and the browser holds no credentials),
      * so the engine fetches and inlines them as data: URLs.
      */
-    private void fillDocsResult(ObjectNode result, String markdown, String path, String fetchBase, String linkBase, String imageBase) {
+    private void fillDocsResult(ObjectNode result, String markdown, String path, String fetchBase, String linkBase, String imageBase, String fallbackBase) {
         boolean truncated = markdown.length() > MAX_DOCS_CHARS;
         String body = truncated ? markdown.substring(0, MAX_DOCS_CHARS) : markdown;
         result.put("found", true);
@@ -182,7 +190,7 @@ public class CatalogService {
         result.put("markdown", body);
         result.put("linkBase", linkBase);
         result.put("imageBase", imageBase);
-        inlineDocImages(body, fetchBase, result.putObject("images"));
+        inlineDocImages(body, fetchBase, fallbackBase, result.putObject("images"));
     }
 
     /** Markdown image syntax: capture the URL in ![alt](url ...). */
@@ -197,7 +205,7 @@ public class CatalogService {
      * leading "./" stripped). External URLs, data:/fragment refs, path-traversal, and SVG are
      * skipped — the client leaves those to its own protocol-allowlisting resolver.
      */
-    private void inlineDocImages(String markdown, String rawBase, ObjectNode images) {
+    private void inlineDocImages(String markdown, String rawBase, String fallbackBase, ObjectNode images) {
         Set<String> seen = new HashSet<>();
         long total = 0;
         Matcher matcher = MD_IMAGE.matcher(markdown);
@@ -216,6 +224,9 @@ public class CatalogService {
                 // Keys come verbatim from the markdown; encode only spaces so already
                 // percent-encoded references aren't double-encoded.
                 byte[] bytes = gitHub.getRawBytes(rawBase + key.replace(" ", "%20"), MAX_DOC_IMAGE_BYTES);
+                if (bytes == null && fallbackBase != null) {
+                    bytes = gitHub.getRawBytes(fallbackBase + key.replace(" ", "%20"), MAX_DOC_IMAGE_BYTES);
+                }
                 if (bytes == null || bytes.length == 0 || total + bytes.length > MAX_DOC_IMAGE_TOTAL) {
                     continue;
                 }

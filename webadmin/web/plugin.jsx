@@ -164,15 +164,13 @@ function useStoreActions(refresh) {
             catch (e) { setLibraries([]); } // fall back to create-new only
         }
     };
-    const requestUninstall = (entry) => setConfirm({ entry, mode: 'uninstall' });
-
     const execute = async () => {
         if (!confirm) return;
         const entry = confirm.entry;
         const content = isContentType(entry.type);
         setBusy(true);
         try {
-            if (confirm.mode === 'install') {
+            {
                 const body = { id: entry.id, tag: entry.tag };
                 if (entry.type === 'code-template') {
                     if (libMode === 'existing') {
@@ -191,10 +189,6 @@ function useStoreActions(refresh) {
                 if (!content) {
                     try { window.dispatchEvent(new Event('webadmin:restart-pending')); } catch (e) { /* non-browser */ }
                 }
-            } else {
-                await apiPost(`${BASE}/_uninstall`, { id: entry.id });
-                toast(`${entry.name} will be uninstalled on the next engine restart.`, 'success');
-                try { window.dispatchEvent(new Event('webadmin:restart-pending')); } catch (e) { /* non-browser */ }
             }
             setConfirm(null);
             await refresh(false);
@@ -212,12 +206,12 @@ function useStoreActions(refresh) {
         const isCodeTemplate = entry.type === 'code-template';
         overlay = (
             <ConfirmOverlay
-                title={confirm.mode === 'install' ? `${content ? 'Import' : 'Install'} ${entry.name}?` : `Uninstall ${entry.name}?`}
-                confirmLabel={confirm.mode === 'install' ? (content ? 'Import' : `Install ${entry.version}`) : 'Uninstall'}
+                title={`${content ? 'Import' : 'Install'} ${entry.name}?`}
+                confirmLabel={content ? 'Import' : `Install ${entry.version}`}
                 busy={busy}
                 onCancel={() => setConfirm(null)}
                 onConfirm={execute}>
-                {confirm.mode === 'install' ? (
+                {(
                     <div>
                         {content ? (
                             <p>
@@ -256,17 +250,12 @@ function useStoreActions(refresh) {
                             from publishers you trust.
                         </p>
                     </div>
-                ) : (
-                    <p>
-                        The extension <span className="mono">{entry.id}</span> will be marked for
-                        removal and uninstalled on the next engine restart.
-                    </p>
                 )}
             </ConfirmOverlay>
         );
     }
 
-    return { requestInstall, requestUninstall, overlay };
+    return { requestInstall, overlay };
 }
 
 /* ------------------------------------------------------------------ */
@@ -384,9 +373,6 @@ function DetailView({ entry, onBack, actions }) {
                         ) : null}
                         {!entry.installable ? (
                             <span className="hint">This type is not installable through the store yet.</span>
-                        ) : null}
-                        {entry.installedVersion && !isContentType(entry.type) ? (
-                            <button className="btn" onClick={() => actions.requestUninstall(entry)}>Uninstall</button>
                         ) : null}
                         {entry.documentation ? (
                             <a className="btn" href={entry.documentation} target="_blank" rel="noreferrer">Documentation</a>
@@ -590,7 +576,7 @@ function InstalledView({ catalog, onSelect, actions }) {
                     </span>{' '}
                     <span className="text-text-dim">
                         Removed or blocked packages keep running on this engine until you act — review the
-                        flagged rows below and uninstall anything you no longer trust.
+                        flagged rows below and uninstall anything you no longer trust from the Extensions page.
                     </span>
                 </div></div>
             ) : null}
@@ -600,19 +586,27 @@ function InstalledView({ catalog, onSelect, actions }) {
             </thead>
             <tbody>
                 {installed.map((entry) => (
-                    <tr key={entry.id}>
-                        <td><a onClick={() => onSelect(entry)} style={{ cursor: 'pointer' }}>{entry.name}</a></td>
+                    // Revoked rows get an unmissable red treatment: tinted row + badge.
+                    <tr key={entry.id} style={entry.revoked ? { background: 'color-mix(in srgb, var(--err) 10%, transparent)' } : undefined}>
+                        <td>
+                            <a onClick={() => onSelect(entry)} style={{ cursor: 'pointer' }}>{entry.name}</a>
+                            {entry.revoked ? (
+                                <span className="tag text-err" style={{ marginLeft: 8 }} title={entry.description}>
+                                    {entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}
+                                </span>
+                            ) : null}
+                        </td>
                         <td><TypeTag type={entry.type} /></td>
                         <td className="mono">{entry.installedVersion}</td>
                         <td className="mono">{entry.revoked ? <span className="text-err">—</span> : entry.updateAvailable ? <span className="text-accent">{entry.version}</span> : entry.version}</td>
                         <td className="mono">{entry.repo}</td>
-                        <td className="flex gap-1">
+                        <td className="flex gap-1 items-center">
                             {entry.updateAvailable ? (
                                 <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>Update</button>
                             ) : null}
-                            {isContentType(entry.type)
-                                ? <span className="hint">Manage in {TYPE_LABELS[entry.type] === 'Channel' ? 'Channels' : 'Code Templates'}</span>
-                                : <button className="btn" onClick={() => actions.requestUninstall(entry)}>Uninstall</button>}
+                            <span className="hint">Manage in {isContentType(entry.type)
+                                ? (TYPE_LABELS[entry.type] === 'Channel' ? 'Channels' : 'Code Templates')
+                                : 'Extensions'}</span>
                         </td>
                     </tr>
                 ))}

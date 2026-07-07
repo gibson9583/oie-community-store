@@ -23,7 +23,7 @@ This is a standard engine extension (Java backend) paired with a web administrat
 * **Engine side** (`src/main/java`): a `ServicePlugin` plus a JAX-RS servlet at `/api/extensions/communitystore`. It owns all outbound communication (catalog index fetches, GitHub org enumeration by topic, release resolution, ETag-cached conditional requests, optional PAT sent to GitHub hosts only), verifies artifacts (inline catalog `sha256` or `.sha256` sidecars), pre-flights extension zips, and installs: extensions through `ExtensionController.extractExtension` (the same code path as a manual install), and content through the engine's channel/code-template controllers.
 * **Web side** (`webadmin/`): a React module for the OIE web administrator with Browse, Installed, and Settings views. The browser never talks to GitHub or artifact hosts and never handles artifacts; it only calls the servlet.
 
-Every REST operation, including catalog reads, is gated by the engine's existing `manageExtensions` permission (`Permissions.EXTENSIONS_MANAGE`). Store access is exactly extension-install access. Installs and uninstalls dispatch server events (user, extension, repo, tag, checksum) to the engine event log.
+Every REST operation, including catalog reads, is gated by the engine's existing `manageExtensions` permission (`Permissions.EXTENSIONS_MANAGE`). Store access is exactly extension-install access. Installs dispatch server events (user, extension, repo, tag, checksum) to the engine event log; uninstalling is done from the engine's own Extensions page.
 
 The servlet deliberately exchanges raw JSON strings rather than typed model classes. This keeps third-party classes out of the engine's XStream serialization pipeline and its security allowlist, and gives the frontend clean JSON without the single-element-list conversion quirk.
 
@@ -134,7 +134,7 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 * Pre-flight rejects zips containing path traversal entries and descriptor/id mismatches.
 * Publisher documentation renders through a sanitizing markdown pipeline: raw HTML is escaped rather than passed through, and only http, https, mailto, and fragment link targets are allowed. Documentation is cached engine-side, capped at 512 KB.
 * When two sources define the same package id, the first-priority source wins (bundled catalog before crawled repos), so a repository cannot squat an id the curated catalog defines.
-* **Revocation:** the store keeps a ledger of what it installed. If an installed package is later removed from — or blocklisted by — every configured source, the Installed tab flags it (“Removed from source” / “Blocked by source”) and prompts the administrator to uninstall, instead of the package silently vanishing from view while it keeps running. Flags are suppressed while any source is failing to sync, so an outage never reads as a takedown.
+* **Revocation:** the store keeps a ledger of what it installed. If an installed package is later removed from — or blocklisted by — every configured source, the Installed tab flags it in red (“Removed from source” / “Blocked by source”) and directs the administrator to uninstall it from the Extensions page, instead of the package silently vanishing from view while it keeps running. Flags are suppressed while any source is failing to sync, so an outage never reads as a takedown.
 
 ## Current limitations
 

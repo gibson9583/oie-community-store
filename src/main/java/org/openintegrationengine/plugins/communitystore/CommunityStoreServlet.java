@@ -30,7 +30,25 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final CommunityStoreServicePlugin plugin = (CommunityStoreServicePlugin) ControllerFactory.getFactory().createExtensionController().getServicePlugins().get(PLUGIN_POINT);
+    /**
+     * Resolved lazily (and cached) rather than at class-init: if this servlet class loads
+     * before the service plugin registers — plausible mid-restart during a self-update —
+     * a static lookup would pin {@code null} forever and NPE every request until another
+     * restart. Lazy resolution retries until the plugin is available.
+     */
+    private static volatile CommunityStoreServicePlugin plugin;
+
+    private static CommunityStoreServicePlugin plugin() throws ClientException {
+        CommunityStoreServicePlugin resolved = plugin;
+        if (resolved == null) {
+            resolved = (CommunityStoreServicePlugin) ControllerFactory.getFactory().createExtensionController().getServicePlugins().get(PLUGIN_POINT);
+            if (resolved == null) {
+                throw new ClientException("The Community Store service plugin is not loaded yet. If the engine is mid-restart, retry shortly.");
+            }
+            plugin = resolved;
+        }
+        return resolved;
+    }
 
     public CommunityStoreServlet(@Context HttpServletRequest request, @Context SecurityContext sc) {
         super(request, sc, PLUGIN_POINT);
@@ -39,7 +57,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
     @Override
     public String getCatalog(boolean refresh) throws ClientException {
         try {
-            return plugin.getCatalogService().getCatalog(refresh).toString();
+            return plugin().getCatalogService().getCatalog(refresh).toString();
         } catch (Exception e) {
             throw new ClientException("Failed to build the Community Store catalog: " + e.getMessage(), e);
         }
@@ -48,7 +66,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
     @Override
     public String getDocs(String id) throws ClientException {
         try {
-            return plugin.getCatalogService().getDocs(id).toString();
+            return plugin().getCatalogService().getDocs(id).toString();
         } catch (Exception e) {
             throw new ClientException("Failed to fetch documentation: " + e.getMessage(), e);
         }
@@ -57,7 +75,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
     @Override
     public String getSettings() throws ClientException {
         try {
-            StoreSettings settings = plugin.getSettings();
+            StoreSettings settings = plugin().getSettings();
             ObjectNode response = MAPPER.createObjectNode();
 
             ArrayNode bundled = response.putArray("bundledSources");
@@ -79,7 +97,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
             response.put("betaChannel", settings.isBetaChannel());
             response.put("syncTtlMinutes", settings.getSyncTtlMinutes());
             response.put("tokenSet", settings.getEncryptedToken() != null && !settings.getEncryptedToken().isBlank());
-            response.put("rateLimitRemaining", plugin.getGitHub().getRateLimitRemaining());
+            response.put("rateLimitRemaining", plugin().getGitHub().getRateLimitRemaining());
             return response.toString();
         } catch (Exception e) {
             throw new ClientException("Failed to read Community Store settings: " + e.getMessage(), e);
@@ -90,7 +108,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
     public String setSettings(String settingsJson) throws ClientException {
         try {
             JsonNode body = MAPPER.readTree(settingsJson);
-            StoreSettings settings = plugin.getSettings();
+            StoreSettings settings = plugin().getSettings();
 
             if (body.has("customSources")) {
                 List<StoreSettings.SourceDef> custom = new ArrayList<>();
@@ -146,7 +164,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
             if (id == null || id.isBlank()) {
                 throw new ClientException("An 'id' is required.");
             }
-            ObjectNode entry = plugin.getCatalogService().findEntry(id);
+            ObjectNode entry = plugin().getCatalogService().findEntry(id);
             if (entry == null) {
                 throw new ClientException("No catalog entry found for id '" + id + "'. Refresh the catalog and try again.");
             }
@@ -163,7 +181,7 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
             if (body.has("newLibrary")) {
                 entry.put("newLibrary", body.path("newLibrary").asText(""));
             }
-            return plugin.getInstallService().install(entry, getCurrentUserId()).toString();
+            return plugin().getInstallService().install(entry, getCurrentUserId()).toString();
         } catch (ClientException e) {
             throw e;
         } catch (Exception e) {
@@ -171,19 +189,4 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
         }
     }
 
-    @Override
-    public String uninstall(String requestJson) throws ClientException {
-        try {
-            JsonNode body = MAPPER.readTree(requestJson);
-            String id = body.path("id").asText(null);
-            if (id == null || id.isBlank()) {
-                throw new ClientException("An 'id' is required.");
-            }
-            return plugin.getInstallService().uninstall(id, getCurrentUserId()).toString();
-        } catch (ClientException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ClientException("Uninstall failed: " + e.getMessage(), e);
-        }
-    }
 }

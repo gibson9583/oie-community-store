@@ -251,10 +251,11 @@ docs are versioned with the artifact. It looks, in order, for:
 
 Authoring notes:
 
-- **Relative links** resolve to your repository at the release tag (GitHub *blob*
-  view). Relative paths are resolved from the **repository root**, not the doc's
-  folder — a `docs/store.md` that shows a screenshot in the same folder must
-  reference it as `docs/screenshot.png`.
+- **Relative links and images resolve against the doc's own folder** — the same
+  semantics GitHub uses when rendering the file. A `docs/store.md` showing a
+  screenshot in the same folder references it as `screenshot.png`. (For images the
+  store also falls back to the repository root, for docs written to the older
+  root-relative rule.)
 - **Relative images** are fetched by the engine at the release tag and inlined, so
   they render inside the administrator (which cannot load external image hosts).
   Use **raster** formats — `.png`, `.jpg`, `.gif`, `.webp`; **SVG is not inlined**.

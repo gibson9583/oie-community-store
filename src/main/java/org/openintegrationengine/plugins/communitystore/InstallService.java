@@ -51,11 +51,18 @@ public class InstallService {
     private static final Logger logger = LogManager.getLogger(InstallService.class);
 
     public static final String EVENT_INSTALL = "Community Store: extension installed";
-    public static final String EVENT_UNINSTALL = "Community Store: extension marked for uninstall";
     public static final String EVENT_FAILURE = "Community Store: install failed";
 
     private final GitHubClient gitHub;
     private final StoreSettings settings;
+
+    /**
+     * Serializes every read-modify-write of the code template library SET. Both content
+     * paths below load ALL libraries, mutate the list, and write it back — two concurrent
+     * installs would otherwise each write their own snapshot and the last writer would
+     * silently erase the other's changes (an entire library could vanish).
+     */
+    private static final Object LIBRARY_WRITE_LOCK = new Object();
 
     public InstallService(GitHubClient gitHub, StoreSettings settings) {
         this.gitHub = gitHub;
@@ -198,10 +205,12 @@ public class InstallService {
                     controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
                 }
             }
-            List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
-            libraries.removeIf(existing -> existing.getId().equals(library.getId()));
-            libraries.add(library);
-            controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+            synchronized (LIBRARY_WRITE_LOCK) {
+                List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+                libraries.removeIf(existing -> existing.getId().equals(library.getId()));
+                libraries.add(library);
+                controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+            }
             imported = "code template library \"" + library.getName() + "\"";
         } else if ("code-template".equals(type)) {
             CodeTemplate template = serializer.deserialize(xml, CodeTemplate.class);
@@ -209,42 +218,45 @@ public class InstallService {
             controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
 
             // A standalone template must belong to a library — the one the user chose.
-            List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
-            String targetLibraryId = entry.path("targetLibraryId").asText("");
-            String newLibraryName = entry.path("newLibrary").asText("").trim();
-            CodeTemplateLibrary target = null;
-            for (CodeTemplateLibrary lib : libraries) {
-                if (lib.getId().equals(targetLibraryId)) {
-                    target = lib;
-                    break;
+            CodeTemplateLibrary target;
+            synchronized (LIBRARY_WRITE_LOCK) {
+                List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+                String targetLibraryId = entry.path("targetLibraryId").asText("");
+                String newLibraryName = entry.path("newLibrary").asText("").trim();
+                target = null;
+                for (CodeTemplateLibrary lib : libraries) {
+                    if (lib.getId().equals(targetLibraryId)) {
+                        target = lib;
+                        break;
+                    }
                 }
-            }
-            if (target == null) {
-                if (!targetLibraryId.isEmpty()) {
-                    throw new IOException("The selected code template library no longer exists. Refresh and choose again.");
+                if (target == null) {
+                    if (!targetLibraryId.isEmpty()) {
+                        throw new IOException("The selected code template library no longer exists. Refresh and choose again.");
+                    }
+                    target = new CodeTemplateLibrary();
+                    target.setId(UUID.randomUUID().toString());
+                    target.setName(newLibraryName.isEmpty() ? "Community Store" : newLibraryName);
+                    target.setCodeTemplates(new ArrayList<>());
+                    libraries.add(target);
                 }
-                target = new CodeTemplateLibrary();
-                target.setId(UUID.randomUUID().toString());
-                target.setName(newLibraryName.isEmpty() ? "Community Store" : newLibraryName);
-                target.setCodeTemplates(new ArrayList<>());
-                libraries.add(target);
-            }
-            List<CodeTemplate> members = target.getCodeTemplates();
-            if (members == null) {
-                members = new ArrayList<>();
-                target.setCodeTemplates(members);
-            }
-            boolean present = false;
-            for (CodeTemplate member : members) {
-                if (member.getId().equals(template.getId())) {
-                    present = true;
-                    break;
+                List<CodeTemplate> members = target.getCodeTemplates();
+                if (members == null) {
+                    members = new ArrayList<>();
+                    target.setCodeTemplates(members);
                 }
+                boolean present = false;
+                for (CodeTemplate member : members) {
+                    if (member.getId().equals(template.getId())) {
+                        present = true;
+                        break;
+                    }
+                }
+                if (!present) {
+                    members.add(template);
+                }
+                controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
             }
-            if (!present) {
-                members.add(template);
-            }
-            controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
             imported = "code template \"" + template.getName() + "\" into library \"" + target.getName() + "\"";
         } else {
             throw new IOException("Unsupported content type: " + type);
@@ -260,19 +272,6 @@ public class InstallService {
         response.put("sha256", actual);
         response.put("restartRequired", false);
         response.put("imported", imported);
-        return response;
-    }
-
-    /** Marks an installed extension for uninstallation on next restart, via the engine's own path. */
-    public ObjectNode uninstall(String extensionPath, Integer userId) throws Exception {
-        ExtensionController extensionController = ControllerFactory.getFactory().createExtensionController();
-        extensionController.prepareExtensionForUninstallation(extensionPath);
-        dispatchEvent(EVENT_UNINSTALL, userId, Map.of("extension", extensionPath), ServerEvent.Outcome.SUCCESS);
-        updateLedger(extensionPath, null);
-        ObjectNode response = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
-        response.put("uninstalled", true);
-        response.put("id", extensionPath);
-        response.put("restartRequired", true);
         return response;
     }
 

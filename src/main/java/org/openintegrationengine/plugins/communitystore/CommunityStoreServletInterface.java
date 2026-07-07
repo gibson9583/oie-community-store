@@ -75,9 +75,4 @@ public interface CommunityStoreServletInterface extends BaseServletInterface {
     @MirthOperation(name = "installCommunityStoreExtension", display = "Install extension from Community Store", permission = Permissions.EXTENSIONS_MANAGE)
     public String install(@Param("request") String requestJson) throws ClientException;
 
-    @POST
-    @Path("/_uninstall")
-    @Operation(summary = "Marks a store-tracked extension for uninstallation on next restart.")
-    @MirthOperation(name = "uninstallCommunityStoreExtension", display = "Uninstall extension from Community Store", permission = Permissions.EXTENSIONS_MANAGE)
-    public String uninstall(@Param("request") String requestJson) throws ClientException;
 }
