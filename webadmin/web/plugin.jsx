@@ -885,7 +885,7 @@ export function register() {
     platform.registerNavItem({
         id: 'community-store',
         label: 'Community Store',
-        icon: 'plug',
+        icon: 'store',
         path: '/community-store',
         section: 'Engine',
         order: 80,
