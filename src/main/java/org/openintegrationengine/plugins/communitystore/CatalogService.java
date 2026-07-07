@@ -60,6 +60,8 @@ public class CatalogService {
     private volatile ObjectNode cachedCatalog;
     private volatile long cachedAtMillis;
     private final Object syncLock = new Object();
+    /** Remote blocklist from the last successful build — used to label revocations. */
+    private volatile Set<String> lastRemoteBlock = new HashSet<>();
 
     public CatalogService(GitHubClient gitHub, StoreSettings settings) {
         this.gitHub = gitHub;
@@ -266,6 +268,8 @@ public class CatalogService {
                 errors.add(sourceError(source.describe(), e.getMessage()));
             }
         }
+
+        lastRemoteBlock = remoteBlock;
 
         // First source wins per package id: bundled sources precede custom ones and the
         // official catalog precedes crawled repos, so a repo cannot squat an id that a
@@ -779,7 +783,71 @@ public class CatalogService {
             }
             entry.put("updateAvailable", updateAvailable);
         }
+
+        // Revocation: a package THIS store installed (see the install ledger) that is still
+        // on the engine but no longer offered by any source has been removed — or blocked —
+        // upstream. Surface it as a revoked entry so the administrator is told and prompted
+        // to uninstall, instead of it silently vanishing from the Installed tab. Suppressed
+        // when any source failed to sync: an unreachable source must not read as a takedown.
+        if (result.withArray("errors").size() == 0) {
+            Set<String> offeredIds = new HashSet<>();
+            for (JsonNode node : result.withArray("entries")) {
+                offeredIds.add(node.path("id").asText());
+            }
+            ObjectNode ledger = settings.getInstallLedger();
+            java.util.Iterator<String> ids = ledger.fieldNames();
+            while (ids.hasNext()) {
+                String id = ids.next();
+                if (offeredIds.contains(id)) {
+                    continue;
+                }
+                JsonNode record = ledger.get(id);
+                String type = record.path("type").asText("plugin");
+                boolean stillInstalled = isContentType(type)
+                        ? contentIds.contains(record.path("contentId").asText(""))
+                        : installed.containsKey(id);
+                if (!stillInstalled) {
+                    continue; // gone from the engine too — nothing to warn about
+                }
+                String repo = record.path("repo").asText("");
+                boolean blocked = settings.isBlocked(repo) || lastRemoteBlock.contains(repo.toLowerCase());
+                result.withArray("entries").add(revokedEntry(id, record, type, blocked,
+                        isContentType(type) ? record.path("version").asText("") : installed.get(id)));
+            }
+        }
         return result;
+    }
+
+    /** A synthesized catalog entry for an installed package whose source revoked it. */
+    private ObjectNode revokedEntry(String id, JsonNode record, String type, boolean blocked, String installedVersion) {
+        ObjectNode entry = MAPPER.createObjectNode();
+        entry.put("id", id);
+        entry.put("name", record.path("name").asText(id));
+        entry.put("description", blocked
+                ? "This package was BLOCKED by its catalog after you installed it. Review it and uninstall unless you trust it."
+                : "This package is no longer offered by any configured source. It may have been withdrawn by its publisher.");
+        entry.put("type", type);
+        entry.put("repo", record.path("repo").asText(""));
+        entry.put("repoUrl", record.path("repoUrl").asText(""));
+        entry.put("tag", "");
+        entry.put("version", record.path("version").asText(""));
+        entry.put("installedVersion", installedVersion == null || installedVersion.isEmpty()
+                ? record.path("version").asText("") : installedVersion);
+        entry.put("compatible", false);
+        entry.put("installable", false);
+        entry.put("updateAvailable", false);
+        entry.put("restartRequired", isBinaryType(type));
+        entry.put("deprecated", false);
+        entry.put("revoked", true);
+        entry.put("revokedReason", blocked ? "blocked" : "removed");
+        entry.put("source", "(no longer offered)");
+        entry.putArray("authors");
+        entry.putArray("keywords");
+        entry.put("assetName", "");
+        entry.put("assetUrl", "");
+        entry.put("checksumUrl", "");
+        entry.put("contentId", record.path("contentId").asText(""));
+        return entry;
     }
 
     /** Installed extension inventory keyed by extension path (the manifest id contract). */

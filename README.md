@@ -134,6 +134,7 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 * Pre-flight rejects zips containing path traversal entries and descriptor/id mismatches.
 * Publisher documentation renders through a sanitizing markdown pipeline: raw HTML is escaped rather than passed through, and only http, https, mailto, and fragment link targets are allowed. Documentation is cached engine-side, capped at 512 KB.
 * When two sources define the same package id, the first-priority source wins (bundled catalog before crawled repos), so a repository cannot squat an id the curated catalog defines.
+* **Revocation:** the store keeps a ledger of what it installed. If an installed package is later removed from — or blocklisted by — every configured source, the Installed tab flags it (“Removed from source” / “Blocked by source”) and prompts the administrator to uninstall, instead of the package silently vanishing from view while it keeps running. Flags are suppressed while any source is failing to sync, so an outage never reads as a takedown.
 
 ## Current limitations
 

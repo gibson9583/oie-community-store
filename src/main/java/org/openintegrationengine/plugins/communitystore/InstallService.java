@@ -55,9 +55,42 @@ public class InstallService {
     public static final String EVENT_FAILURE = "Community Store: install failed";
 
     private final GitHubClient gitHub;
+    private final StoreSettings settings;
 
-    public InstallService(GitHubClient gitHub) {
+    public InstallService(GitHubClient gitHub, StoreSettings settings) {
         this.gitHub = gitHub;
+        this.settings = settings;
+    }
+
+    /**
+     * Records what this store installed (or removes the record on uninstall) so the
+     * catalog sync can flag installed packages whose source has since removed or
+     * blocked them (revocation). Best-effort: a ledger failure never fails the install.
+     */
+    private void updateLedger(String id, ObjectNode record) {
+        try {
+            if (record == null) {
+                settings.removeInstall(id);
+            } else {
+                settings.recordInstall(id, record);
+            }
+            ControllerFactory.getFactory().createExtensionController()
+                    .setPluginProperties(CommunityStoreServicePlugin.PLUGIN_POINT, settings.toProperties());
+        } catch (Exception e) {
+            logger.warn("Community Store: could not persist the install ledger", e);
+        }
+    }
+
+    private ObjectNode ledgerRecord(ObjectNode entry) {
+        ObjectNode record = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        record.put("name", entry.path("name").asText(""));
+        record.put("type", entry.path("type").asText(""));
+        record.put("version", entry.path("version").asText(""));
+        record.put("repo", entry.path("repo").asText(""));
+        record.put("repoUrl", entry.path("repoUrl").asText(""));
+        record.put("contentId", entry.path("contentId").asText(""));
+        record.put("installedAt", System.currentTimeMillis());
+        return record;
     }
 
     /**
@@ -115,6 +148,7 @@ public class InstallService {
             }
 
             dispatchEvent(EVENT_INSTALL, userId, Map.of("extension", id, "repo", repo, "tag", tag, "sha256", actual), ServerEvent.Outcome.SUCCESS);
+            updateLedger(id, ledgerRecord(entry));
 
             ObjectNode response = entry.objectNode();
             response.put("installed", true);
@@ -217,6 +251,7 @@ public class InstallService {
         }
 
         dispatchEvent(EVENT_INSTALL, userId, Map.of("extension", id, "repo", repo, "tag", tag, "sha256", actual), ServerEvent.Outcome.SUCCESS);
+        updateLedger(id, ledgerRecord(entry));
 
         ObjectNode response = entry.objectNode();
         response.put("installed", true);
@@ -233,6 +268,7 @@ public class InstallService {
         ExtensionController extensionController = ControllerFactory.getFactory().createExtensionController();
         extensionController.prepareExtensionForUninstallation(extensionPath);
         dispatchEvent(EVENT_UNINSTALL, userId, Map.of("extension", extensionPath), ServerEvent.Outcome.SUCCESS);
+        updateLedger(extensionPath, null);
         ObjectNode response = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
         response.put("uninstalled", true);
         response.put("id", extensionPath);

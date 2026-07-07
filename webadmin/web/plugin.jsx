@@ -109,7 +109,12 @@ function Badges({ entry }) {
         <span className="flex gap-1 items-center flex-wrap">
             {entry.installedVersion ? <span className="tag">Installed {entry.installedVersion}</span> : null}
             {entry.updateAvailable ? <span className="tag text-accent">Update {entry.version}</span> : null}
-            {!entry.compatible ? <span className="tag">Incompatible</span> : null}
+            {entry.revoked ? (
+                <span className="tag text-err" title={entry.description}>
+                    {entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}
+                </span>
+            ) : null}
+            {!entry.compatible && !entry.revoked ? <span className="tag">Incompatible</span> : null}
             {entry.deprecated ? <span className="tag">Deprecated</span> : null}
         </span>
     );
@@ -332,6 +337,14 @@ function DetailView({ entry, onBack, actions }) {
                 <Badges entry={entry} />
             </div>
 
+            {entry.revoked ? (
+                <div className="panel mb-3"><div className="panel-body">
+                    <span className="text-err font-semibold">
+                        {entry.revokedReason === 'blocked' ? 'Blocked by its catalog.' : 'Removed from its source.'}
+                    </span>{' '}
+                    <span className="text-text-dim">{entry.description}</span>
+                </div></div>
+            ) : null}
             {entry.deprecated ? (
                 <div className="panel mb-3"><div className="panel-body text-accent">
                     Deprecated by the publisher{entry.deprecationMessage ? `: ${entry.deprecationMessage}` : '.'}
@@ -486,6 +499,7 @@ function BrowseView({ catalog, onSelect }) {
     const setGroup = (g) => { setGroupByType(g); setPref('group', g ? '1' : '0'); };
 
     const entries = (catalog.entries || []).filter((entry) => {
+        if (entry.revoked) return false;   // surfaced on the Installed tab, not browseable
         if (typeFilter && entry.type !== typeFilter) return false;
         if (!search) return true;
         const haystack = `${entry.name} ${entry.description} ${entry.repo} ${(entry.keywords || []).join(' ')}`.toLowerCase();
@@ -559,6 +573,7 @@ function BrowseView({ catalog, onSelect }) {
 
 function InstalledView({ catalog, onSelect, actions }) {
     const installed = (catalog.entries || []).filter((e) => e.installedVersion);
+    const revoked = installed.filter((e) => e.revoked);
     if (installed.length === 0) {
         return <div className="panel"><div className="panel-body text-text-dim">
             No store-tracked extensions are installed. Extensions installed manually appear here once
@@ -566,6 +581,19 @@ function InstalledView({ catalog, onSelect, actions }) {
         </div></div>;
     }
     return (
+        <div>
+            {revoked.length > 0 ? (
+                <div className="panel mb-3"><div className="panel-body">
+                    <span className="text-err">
+                        {revoked.length === 1 ? 'An installed package is' : `${revoked.length} installed packages are`} no
+                        longer offered by {revoked.length === 1 ? 'its' : 'their'} source.
+                    </span>{' '}
+                    <span className="text-text-dim">
+                        Removed or blocked packages keep running on this engine until you act — review the
+                        flagged rows below and uninstall anything you no longer trust.
+                    </span>
+                </div></div>
+            ) : null}
         <table className="dt">
             <thead>
                 <tr><th>Name</th><th>Type</th><th>Installed</th><th>Available</th><th>Repository</th><th></th></tr>
@@ -576,7 +604,7 @@ function InstalledView({ catalog, onSelect, actions }) {
                         <td><a onClick={() => onSelect(entry)} style={{ cursor: 'pointer' }}>{entry.name}</a></td>
                         <td><TypeTag type={entry.type} /></td>
                         <td className="mono">{entry.installedVersion}</td>
-                        <td className="mono">{entry.updateAvailable ? <span className="text-accent">{entry.version}</span> : entry.version}</td>
+                        <td className="mono">{entry.revoked ? <span className="text-err">—</span> : entry.updateAvailable ? <span className="text-accent">{entry.version}</span> : entry.version}</td>
                         <td className="mono">{entry.repo}</td>
                         <td className="flex gap-1">
                             {entry.updateAvailable ? (
@@ -590,6 +618,7 @@ function InstalledView({ catalog, onSelect, actions }) {
                 ))}
             </tbody>
         </table>
+        </div>
     );
 }
 

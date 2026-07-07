@@ -32,6 +32,7 @@ public class StoreSettings {
     public static final String PROP_BETA_CHANNEL = "betaChannel";
     public static final String PROP_GITHUB_TOKEN_ENC = "githubTokenEncrypted";
     public static final String PROP_SYNC_TTL_MINUTES = "syncTtlMinutes";
+    public static final String PROP_INSTALL_LEDGER = "installLedger";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -131,6 +132,9 @@ public class StoreSettings {
     private volatile boolean betaChannel = false;
     private volatile String encryptedToken = "";
     private volatile int syncTtlMinutes = 15;
+    // What THIS store installed (id -> {name,type,version,repo,contentId,installedAt}).
+    // The revocation check compares it against what sources currently offer.
+    private volatile ObjectNode installLedger = MAPPER.createObjectNode();
 
     /** Loads the bundled sources.json from the plugin jar. */
     public void loadBundled() {
@@ -178,6 +182,12 @@ public class StoreSettings {
         } catch (Exception e) {
             this.localBlocklist = new HashSet<>();
         }
+        try {
+            JsonNode ledger = MAPPER.readTree(properties.getProperty(PROP_INSTALL_LEDGER, "{}"));
+            this.installLedger = ledger instanceof ObjectNode ? (ObjectNode) ledger : MAPPER.createObjectNode();
+        } catch (Exception e) {
+            this.installLedger = MAPPER.createObjectNode();
+        }
         this.betaChannel = Boolean.parseBoolean(properties.getProperty(PROP_BETA_CHANNEL, "false"));
         this.encryptedToken = properties.getProperty(PROP_GITHUB_TOKEN_ENC, "");
         try {
@@ -200,6 +210,7 @@ public class StoreSettings {
             block.add(entry);
         }
         properties.setProperty(PROP_LOCAL_BLOCKLIST, block.toString());
+        properties.setProperty(PROP_INSTALL_LEDGER, installLedger.toString());
         properties.setProperty(PROP_BETA_CHANNEL, Boolean.toString(betaChannel));
         properties.setProperty(PROP_GITHUB_TOKEN_ENC, encryptedToken == null ? "" : encryptedToken);
         properties.setProperty(PROP_SYNC_TTL_MINUTES, Integer.toString(syncTtlMinutes));
@@ -268,5 +279,18 @@ public class StoreSettings {
 
     public int getSyncTtlMinutes() {
         return syncTtlMinutes;
+    }
+
+    /** The install ledger (live object — callers mutate then persist via the controller). */
+    public ObjectNode getInstallLedger() {
+        return installLedger;
+    }
+
+    public synchronized void recordInstall(String id, ObjectNode record) {
+        installLedger.set(id, record);
+    }
+
+    public synchronized void removeInstall(String id) {
+        installLedger.remove(id);
     }
 }

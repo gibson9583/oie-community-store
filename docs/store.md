@@ -20,6 +20,8 @@ on-ramp. The engine downloads, sha256-verifies, and installs everything itself.
   gated by the existing manage-extensions permission.
 - **Self-aware updates** — the store is listed in the catalog, so a newer release
   shows up as an update like any other package.
+- **Revocation alerts** — packages you installed that are later removed or blocked
+  by their source are flagged on the Installed tab with a prompt to uninstall.
 - **Settings** for custom sources (catalog indexes, repositories, org/user topic
   crawls), a local blocklist, the beta channel, sync interval, and an optional
   (encrypted) GitHub token — which is only ever sent to GitHub, never to third-party

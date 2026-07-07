@@ -30,7 +30,7 @@ public class CommunityStoreServicePlugin implements ServicePlugin {
     private final StoreSettings settings = new StoreSettings();
     private final GitHubClient gitHub = new GitHubClient(this::decryptedToken);
     private final CatalogService catalogService = new CatalogService(gitHub, settings);
-    private final InstallService installService = new InstallService(gitHub);
+    private final InstallService installService = new InstallService(gitHub, settings);
 
     @Override
     public String getPluginPointName() {
@@ -57,6 +57,7 @@ public class CommunityStoreServicePlugin implements ServicePlugin {
         defaults.setProperty(StoreSettings.PROP_BETA_CHANNEL, "false");
         defaults.setProperty(StoreSettings.PROP_GITHUB_TOKEN_ENC, "");
         defaults.setProperty(StoreSettings.PROP_SYNC_TTL_MINUTES, "15");
+        defaults.setProperty(StoreSettings.PROP_INSTALL_LEDGER, "{}");
         return defaults;
     }
 
