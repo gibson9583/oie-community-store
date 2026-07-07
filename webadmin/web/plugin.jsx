@@ -17,6 +17,16 @@ const BASE = '/extensions/communitystore';
 /* markdown.js (raw HTML escaped, link/image protocols allowlisted).    */
 /* ------------------------------------------------------------------ */
 
+const STORE_CSS = `
+/* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
+   left bar, in light and dark themes. */
+table.dt tbody tr.cs-revoked,
+table.dt tbody tr.cs-revoked:hover {
+    background: color-mix(in srgb, var(--err) 16%, var(--bg1)) !important;
+    box-shadow: inset 4px 0 0 var(--err);
+}
+`;
+
 const DOCS_CSS = `
 .cs-docs { line-height: 1.55; overflow-wrap: break-word; }
 .cs-docs img { max-width: 100%; }
@@ -587,7 +597,7 @@ function InstalledView({ catalog, onSelect, actions }) {
             <tbody>
                 {installed.map((entry) => (
                     // Revoked rows get an unmissable red treatment: tinted row + badge.
-                    <tr key={entry.id} style={entry.revoked ? { background: 'color-mix(in srgb, var(--err) 10%, transparent)' } : undefined}>
+                    <tr key={entry.id} className={entry.revoked ? 'cs-revoked' : undefined}>
                         <td>
                             <a onClick={() => onSelect(entry)} style={{ cursor: 'pointer' }}>{entry.name}</a>
                             {entry.revoked ? (
@@ -834,6 +844,7 @@ function CommunityStoreView() {
 
     return (
         <div className="view flex flex-col flex-1 min-h-0">
+            <style>{STORE_CSS}</style>
             {actions.overlay}
             {selected ? (
                 <div className="view-body">
