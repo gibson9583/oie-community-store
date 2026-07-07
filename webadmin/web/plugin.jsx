@@ -18,6 +18,10 @@ const BASE = '/extensions/communitystore';
 /* ------------------------------------------------------------------ */
 
 const STORE_CSS = `
+/* Type/status pills: never wrap their text into tall ovals — tight card rows wrap
+   the whole pill to the next line instead. */
+.cs-store .tag { white-space: nowrap; }
+
 /* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
    left bar, in light and dark themes. */
 table.dt tbody tr.cs-revoked,
@@ -165,7 +169,9 @@ function useStoreActions(refresh) {
 
     const requestInstall = async (entry) => {
         setConfirm({ entry, mode: 'install' });
-        if (entry.type === 'code-template') {
+        // The library picker applies only to a FRESH standalone-template install; an
+        // update / re-import keeps its existing library membership (backend enforces).
+        if (entry.type === 'code-template' && !entry.installedVersion) {
             setLibMode('new');
             setNewLib(entry.name || 'Community Store');
             setExistingLib('');
@@ -182,7 +188,7 @@ function useStoreActions(refresh) {
         try {
             {
                 const body = { id: entry.id, tag: entry.tag };
-                if (entry.type === 'code-template') {
+                if (entry.type === 'code-template' && !entry.installedVersion) {
                     if (libMode === 'existing') {
                         if (!existingLib) { toast('Choose a library to add this code template to.', 'warn'); setBusy(false); return; }
                         body.targetLibraryId = existingLib;
@@ -213,11 +219,11 @@ function useStoreActions(refresh) {
     if (confirm) {
         const entry = confirm.entry;
         const content = isContentType(entry.type);
-        const isCodeTemplate = entry.type === 'code-template';
+        const isCodeTemplate = entry.type === 'code-template' && !entry.installedVersion;
         overlay = (
             <ConfirmOverlay
-                title={`${content ? 'Import' : 'Install'} ${entry.name}?`}
-                confirmLabel={content ? 'Import' : `Install ${entry.version}`}
+                title={`${content ? (entry.updateAvailable ? 'Update' : 'Import') : 'Install'} ${entry.name}?`}
+                confirmLabel={content ? (entry.updateAvailable ? `Update to ${entry.version}` : 'Import') : `Install ${entry.version}`}
                 busy={busy}
                 onCancel={() => setConfirm(null)}
                 onConfirm={execute}>
@@ -377,7 +383,7 @@ function DetailView({ entry, onBack, actions }) {
                         {entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
                             <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>
                                 {isContentType(entry.type)
-                                    ? (entry.installedVersion ? 'Re-import' : 'Import')
+                                    ? (entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? 'Re-import' : 'Import')
                                     : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
                             </button>
                         ) : null}
@@ -407,7 +413,7 @@ function EntryCard({ entry, onSelect }) {
     return (
         <div className="panel" style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
             <div className="panel-body">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <strong>{entry.name}</strong>
                     <span className="mono text-text-dim">{entry.version}</span>
                     <TypeTag type={entry.type} />
@@ -843,7 +849,7 @@ function CommunityStoreView() {
     );
 
     return (
-        <div className="view flex flex-col flex-1 min-h-0">
+        <div className="view cs-store flex flex-col flex-1 min-h-0">
             <style>{STORE_CSS}</style>
             {actions.overlay}
             {selected ? (

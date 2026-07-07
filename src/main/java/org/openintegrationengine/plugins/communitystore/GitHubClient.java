@@ -23,9 +23,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Thin GitHub client over java.net.http. All API GETs use conditional requests with an
- * in-memory ETag cache: a 304 revalidation does not consume the caller's rate limit, which is
- * what keeps unauthenticated steady-state sync viable. An optional PAT (supplied lazily so
- * settings changes apply without re-wiring) raises the rate ceiling and enables private sources.
+ * in-memory ETag cache. NOTE GitHub's documented behavior: a 304 revalidation is free of the
+ * primary rate limit ONLY on authenticated requests — unauthenticated requests count against
+ * the 60/hour cap whether or not they return 304. A PAT (supplied lazily so settings changes
+ * apply without re-wiring) is therefore what makes steady-state sync viable beyond a handful
+ * of crawled sources; it also enables private sources.
  */
 public class GitHubClient {
 

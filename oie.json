@@ -4,7 +4,7 @@
     "name": "Community Store",
     "description": "Discover, install, and update community plugins from GitHub releases — verified by sha256 and installed through the engine's own extension installer.",
     "type": "plugin",
-    "version": "0.5.3",
+    "version": "0.6.0",
     "minEngineVersion": "4.6.0",
     "maxEngineVersion": null,
     "filename": "communitystore-{version}.zip",

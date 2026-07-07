@@ -675,13 +675,25 @@ public class CatalogService {
         return sb.toString();
     }
 
+    /** oie.json schema versions this store understands. */
+    private static final int MAX_MANIFEST_SCHEMA = 1;
+
     private JsonNode fetchManifest(String fullName, String tag) throws Exception {
         String raw = gitHub.getRawText(GitHubClient.RAW_BASE + "/" + fullName + "/" + tag + "/oie.json");
         if (raw == null) {
             return null;
         }
         try {
-            return MAPPER.readTree(raw);
+            JsonNode manifest = MAPPER.readTree(raw);
+            // A manifest published for a newer store is skipped (never half-parsed); the
+            // release walk continues to older releases, whose manifests may still be readable.
+            int schema = manifest.path("schemaVersion").asInt(1);
+            if (schema > MAX_MANIFEST_SCHEMA) {
+                logger.warn("Community Store: " + fullName + "@" + tag + " declares oie.json schemaVersion " + schema
+                        + " (this store supports up to " + MAX_MANIFEST_SCHEMA + ") — skipping this release.");
+                return null;
+            }
+            return manifest;
         } catch (Exception e) {
             logger.warn("Community Store: invalid oie.json in " + fullName + " at " + tag);
             return null;
@@ -773,15 +785,27 @@ public class CatalogService {
         ObjectNode result = catalog.deepCopy();
         Map<String, String> installed = installedVersionsByPath();
         Set<String> contentIds = installedContentIds();
+        ObjectNode ledgerForVersions = settings.getInstallLedger();
         for (JsonNode node : result.withArray("entries")) {
             ObjectNode entry = (ObjectNode) node;
             if (isContentType(entry.path("type").asText())) {
                 // Content is matched by the artifact's engine id (declared as contentId in the
-                // manifest); it has no comparable version, so we only surface installed/not-installed.
+                // manifest). The engine stores no version for content, but the install ledger
+                // remembers what version THIS store imported — so ledger-tracked content gets
+                // real update detection; content installed outside the store just shows present.
                 String contentId = entry.path("contentId").asText("");
                 boolean present = !contentId.isEmpty() && contentIds.contains(contentId);
-                entry.put("installedVersion", present ? entry.path("version").asText() : "");
-                entry.put("updateAvailable", false);
+                JsonNode record = ledgerForVersions.get(entry.path("id").asText());
+                String ledgerVersion = record != null ? record.path("version").asText("") : "";
+                boolean updateAvailable = false;
+                if (present && !ledgerVersion.isEmpty()) {
+                    SemVer current = SemVer.parse(ledgerVersion);
+                    SemVer offered = SemVer.parse(entry.path("version").asText());
+                    updateAvailable = current != null && offered != null && offered.compareTo(current) > 0
+                            && entry.path("compatible").asBoolean(false);
+                }
+                entry.put("installedVersion", present ? (!ledgerVersion.isEmpty() ? ledgerVersion : entry.path("version").asText()) : "");
+                entry.put("updateAvailable", updateAvailable);
                 continue;
             }
             String installedVersion = installed.get(entry.path("id").asText());
@@ -806,27 +830,55 @@ public class CatalogService {
                 offeredIds.add(node.path("id").asText());
             }
             ObjectNode ledger = settings.getInstallLedger();
+            List<String> stale = new ArrayList<>();
             java.util.Iterator<String> ids = ledger.fieldNames();
             while (ids.hasNext()) {
                 String id = ids.next();
-                if (offeredIds.contains(id)) {
-                    continue;
-                }
                 JsonNode record = ledger.get(id);
                 String type = record.path("type").asText("plugin");
                 boolean stillInstalled = isContentType(type)
                         ? contentIds.contains(record.path("contentId").asText(""))
                         : installed.containsKey(id);
                 if (!stillInstalled) {
-                    continue; // gone from the engine too — nothing to warn about
+                    // Uninstalled outside the store (Extensions page / native views). Prune the
+                    // record — but only once it has aged past the freshly-installed window: a
+                    // just-installed extension isn't in the engine inventory until the restart,
+                    // and must not have its ledger entry reaped in the meantime.
+                    if (System.currentTimeMillis() - record.path("installedAt").asLong(0) > LEDGER_PRUNE_AFTER_MILLIS) {
+                        stale.add(id);
+                    }
+                    continue;
+                }
+                if (offeredIds.contains(id)) {
+                    continue;
                 }
                 String repo = record.path("repo").asText("");
                 boolean blocked = settings.isBlocked(repo) || lastRemoteBlock.contains(repo.toLowerCase());
                 result.withArray("entries").add(revokedEntry(id, record, type, blocked,
                         isContentType(type) ? record.path("version").asText("") : installed.get(id)));
             }
+            if (!stale.isEmpty()) {
+                pruneLedger(stale);
+            }
         }
         return result;
+    }
+
+    /** How long an uninstalled package's ledger record survives before pruning (see above). */
+    private static final long LEDGER_PRUNE_AFTER_MILLIS = 7L * 24 * 60 * 60 * 1000;
+
+    /** Removes stale ledger records and persists — best-effort, never fails a catalog read. */
+    private void pruneLedger(List<String> ids) {
+        try {
+            for (String id : ids) {
+                settings.removeInstall(id);
+            }
+            ControllerFactory.getFactory().createExtensionController()
+                    .setPluginProperties(CommunityStoreServicePlugin.PLUGIN_POINT, settings.toProperties());
+            logger.info("Community Store: pruned " + ids.size() + " ledger record(s) for packages uninstalled outside the store.");
+        } catch (Exception e) {
+            logger.warn("Community Store: could not prune the install ledger", e);
+        }
     }
 
     /** A synthesized catalog entry for an installed package whose source revoked it. */

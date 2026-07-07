@@ -191,13 +191,16 @@ public class InstallService {
         ObjectXMLSerializer serializer = ObjectXMLSerializer.getInstance();
         String imported;
 
+        String declaredContentId = entry.path("contentId").asText("");
         if ("channel".equals(type)) {
             Channel channel = serializer.deserialize(xml, Channel.class);
+            requireContentIdMatch(declaredContentId, channel.getId(), "channel");
             ChannelController controller = ControllerFactory.getFactory().createChannelController();
             controller.updateChannel(channel, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true, null);
             imported = "channel \"" + channel.getName() + "\"";
         } else if ("code-template-library".equals(type)) {
             CodeTemplateLibrary library = serializer.deserialize(xml, CodeTemplateLibrary.class);
+            requireContentIdMatch(declaredContentId, library.getId(), "code template library");
             CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
             // Persist each member template's content, then merge the library into the existing set.
             if (library.getCodeTemplates() != null) {
@@ -214,13 +217,34 @@ public class InstallService {
             imported = "code template library \"" + library.getName() + "\"";
         } else if ("code-template".equals(type)) {
             CodeTemplate template = serializer.deserialize(xml, CodeTemplate.class);
+            requireContentIdMatch(declaredContentId, template.getId(), "code template");
             CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
             controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
 
-            // A standalone template must belong to a library — the one the user chose.
+            // A standalone template must belong to a library — the one the user chose. If it
+            // already belongs to one (an update / re-import), leave membership alone: no
+            // library prompt applies and it must not be duplicated into a second library.
             CodeTemplateLibrary target;
             synchronized (LIBRARY_WRITE_LOCK) {
                 List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+                CodeTemplateLibrary existingHome = null;
+                for (CodeTemplateLibrary lib : libraries) {
+                    if (lib.getCodeTemplates() != null) {
+                        for (CodeTemplate member : lib.getCodeTemplates()) {
+                            if (member.getId().equals(template.getId())) {
+                                existingHome = lib;
+                                break;
+                            }
+                        }
+                    }
+                    if (existingHome != null) {
+                        break;
+                    }
+                }
+                if (existingHome != null) {
+                    imported = "code template \"" + template.getName() + "\" (updated in library \"" + existingHome.getName() + "\")";
+                    target = null;
+                } else {
                 String targetLibraryId = entry.path("targetLibraryId").asText("");
                 String newLibraryName = entry.path("newLibrary").asText("").trim();
                 target = null;
@@ -256,8 +280,9 @@ public class InstallService {
                     members.add(template);
                 }
                 controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+                imported = "code template \"" + template.getName() + "\" into library \"" + target.getName() + "\"";
+                }
             }
-            imported = "code template \"" + template.getName() + "\" into library \"" + target.getName() + "\"";
         } else {
             throw new IOException("Unsupported content type: " + type);
         }
@@ -330,6 +355,18 @@ public class InstallService {
             }
         }
         return false;
+    }
+
+    /**
+     * The manifest's contentId is how the store detects that content is installed — a
+     * mismatch with the artifact's real engine id would silently break installed-state
+     * tracking, so refuse it with an actionable error instead.
+     */
+    private static void requireContentIdMatch(String declared, String actual, String what) throws IOException {
+        if (!declared.isEmpty() && actual != null && !declared.equalsIgnoreCase(actual)) {
+            throw new IOException("The " + what + " artifact's id (" + actual + ") does not match the manifest's contentId ("
+                    + declared + "). Installed-state tracking would break — the publisher should correct the manifest.");
+        }
     }
 
     private static String parseChecksum(String sidecar) throws IOException {
