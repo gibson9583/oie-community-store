@@ -1,7 +1,7 @@
 <pluginMetaData path="communitystore">
 	<name>Community Store</name>
 	<author>Chris Gibson</author>
-	<pluginVersion>0.6.0</pluginVersion>
+	<pluginVersion>0.7.0</pluginVersion>
 	<mirthVersion>4.6.0</mirthVersion>
 	<url>https://openintegrationengine.org</url>
 	<description>Discover, install, and update community plugins from GitHub releases. Sources are git repositories and organizations; artifacts are release zip assets verified by sha256 and installed through the engine's own extension installer under the manage-extensions permission.</description>

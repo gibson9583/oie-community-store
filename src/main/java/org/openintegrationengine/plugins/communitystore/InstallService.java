@@ -52,6 +52,7 @@ public class InstallService {
 
     public static final String EVENT_INSTALL = "Community Store: extension installed";
     public static final String EVENT_FAILURE = "Community Store: install failed";
+    public static final String EVENT_REMOVE = "Community Store: content removed";
 
     private final GitHubClient gitHub;
     private final StoreSettings settings;
@@ -216,10 +217,9 @@ public class InstallService {
             }
             imported = "code template library \"" + library.getName() + "\"";
         } else if ("code-template".equals(type)) {
+            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
             CodeTemplate template = serializer.deserialize(xml, CodeTemplate.class);
             requireContentIdMatch(declaredContentId, template.getId(), "code template");
-            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
-            controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
 
             // A standalone template must belong to a library — the one the user chose. If it
             // already belongs to one (an update / re-import), leave membership alone: no
@@ -241,6 +241,7 @@ public class InstallService {
                         break;
                     }
                 }
+                controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
                 if (existingHome != null) {
                     imported = "code template \"" + template.getName() + "\" (updated in library \"" + existingHome.getName() + "\")";
                     target = null;
@@ -362,6 +363,91 @@ public class InstallService {
      * mismatch with the artifact's real engine id would silently break installed-state
      * tracking, so refuse it with an actionable error instead.
      */
+    /**
+     * Removes imported content from the engine — the content counterpart of removing an
+     * extension from the Extensions page. Per type:
+     * code-template: deletes the template record and drops its library membership;
+     * code-template-library: deletes the library AND its current member templates (the same
+     * semantics as deleting a library in the Code Templates view);
+     * channel: deletes the channel and its message history — REFUSED while deployed, because
+     * stopping live traffic must be an explicit decision made in the Channels view.
+     * Always clears the install ledger record.
+     */
+    public ObjectNode removeContent(String id, String type, String contentId, Integer userId) throws Exception {
+        if (contentId == null || contentId.isEmpty()) {
+            throw new IOException("No engine id is known for '" + id + "', so the store cannot remove it. Delete it from its native view instead.");
+        }
+        String removed;
+        if ("channel".equals(type)) {
+            ChannelController channelController = ControllerFactory.getFactory().createChannelController();
+            Channel channel = channelController.getChannelById(contentId);
+            if (channel == null) {
+                throw new IOException("The channel is not on this engine.");
+            }
+            if (channelController.getDeployedChannelById(contentId) != null) {
+                throw new IOException("Channel \"" + channel.getName() + "\" is deployed. Undeploy it in the Channels view first, then remove it.");
+            }
+            channelController.removeChannel(channel, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT);
+            removed = "channel \"" + channel.getName() + "\"";
+        } else if ("code-template-library".equals(type)) {
+            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
+            synchronized (LIBRARY_WRITE_LOCK) {
+                List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+                CodeTemplateLibrary target = null;
+                for (CodeTemplateLibrary lib : libraries) {
+                    if (contentId.equals(lib.getId())) {
+                        target = lib;
+                        break;
+                    }
+                }
+                if (target == null) {
+                    throw new IOException("The code template library is not on this engine.");
+                }
+                List<String> memberIds = new ArrayList<>();
+                if (target.getCodeTemplates() != null) {
+                    for (CodeTemplate member : target.getCodeTemplates()) {
+                        memberIds.add(member.getId());
+                    }
+                }
+                libraries.remove(target);
+                controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+                for (String memberId : memberIds) {
+                    controller.removeCodeTemplate(memberId, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT);
+                }
+                removed = "library \"" + target.getName() + "\" and its " + memberIds.size() + " code template(s)";
+            }
+        } else if ("code-template".equals(type)) {
+            CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
+            String removedFrom = null;
+            synchronized (LIBRARY_WRITE_LOCK) {
+                List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
+                boolean membershipChanged = false;
+                for (CodeTemplateLibrary lib : libraries) {
+                    List<CodeTemplate> members = lib.getCodeTemplates();
+                    if (members != null && members.removeIf(member -> contentId.equals(member.getId()))) {
+                        membershipChanged = true;
+                        removedFrom = lib.getName();
+                    }
+                }
+                if (membershipChanged) {
+                    controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+                }
+                controller.removeCodeTemplate(contentId, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT);
+            }
+            removed = "code template" + (removedFrom == null ? "" : " (from library \"" + removedFrom + "\")");
+        } else {
+            throw new IOException("Only channels, code templates, and code template libraries can be removed through the store.");
+        }
+        dispatchEvent(EVENT_REMOVE, userId, Map.of("package", id, "contentId", contentId, "removed", removed), ServerEvent.Outcome.SUCCESS);
+        updateLedger(id, null);
+
+        ObjectNode response = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        response.put("removed", true);
+        response.put("id", id);
+        response.put("detail", removed);
+        return response;
+    }
+
     private static void requireContentIdMatch(String declared, String actual, String what) throws IOException {
         if (!declared.isEmpty() && actual != null && !declared.equalsIgnoreCase(actual)) {
             throw new IOException("The " + what + " artifact's id (" + actual + ") does not match the manifest's contentId ("

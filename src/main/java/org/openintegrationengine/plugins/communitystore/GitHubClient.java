@@ -191,6 +191,11 @@ public class GitHubClient {
                 currentUrl = URI.create(currentUrl).resolve(location).toString();
                 continue;
             }
+            if (status == 404) {
+                try (InputStream drain = response.body()) { /* release the connection */ }
+                throw new IOException("The artifact was not found (HTTP 404): " + url
+                        + " — the file does not exist at its published location. The publisher may not have pushed it yet, or it was moved or deleted. Sync and retry; if it persists, report it to the source.");
+            }
             if (status != 200) {
                 try (InputStream drain = response.body()) { /* release the connection */ }
                 throw new IOException("Asset download failed (HTTP " + status + "): " + url);

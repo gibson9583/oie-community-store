@@ -70,6 +70,12 @@ public interface CommunityStoreServletInterface extends BaseServletInterface {
     public String setSettings(@Param("settings") String settingsJson) throws ClientException;
 
     @POST
+    @Path("/_removeContent")
+    @Operation(summary = "Removes imported content (channel, code template, or code template library) and its install record. Deployed channels are refused.")
+    @MirthOperation(name = "removeCommunityStoreContent", display = "Remove content installed from Community Store", permission = Permissions.EXTENSIONS_MANAGE)
+    public String removeContent(@Param("request") String requestJson) throws ClientException;
+
+    @POST
     @Path("/_install")
     @Operation(summary = "Downloads, verifies, and installs a catalog entry through the engine's extension installer.")
     @MirthOperation(name = "installCommunityStoreExtension", display = "Install extension from Community Store", permission = Permissions.EXTENSIONS_MANAGE)

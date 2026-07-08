@@ -70,7 +70,17 @@ function toast(message, kind) {
 }
 
 function errText(e) {
-    return (e && (e.message || e.statusText)) ? (e.message || e.statusText) : String(e);
+    let text = (e && (e.message || e.statusText)) ? (e.message || e.statusText) : String(e);
+    // Engine-side failures arrive as a serialized ClientException XML blob — stack trace
+    // and all. Surface only the human message (the outermost <detailMessage>).
+    const m = /<detailMessage>([\s\S]*?)<\/detailMessage>/.exec(text);
+    if (m) {
+        text = m[1]
+            .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+            .trim();
+    }
+    return text;
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,12 +190,21 @@ function useStoreActions(refresh) {
             catch (e) { setLibraries([]); } // fall back to create-new only
         }
     };
+    const requestRemove = (entry) => setConfirm({ entry, mode: 'remove' });
+
     const execute = async () => {
         if (!confirm) return;
         const entry = confirm.entry;
         const content = isContentType(entry.type);
         setBusy(true);
         try {
+            if (confirm.mode === 'remove') {
+                await apiPost(`${BASE}/_removeContent`, { id: entry.id });
+                toast(`Removed ${entry.name} from this engine.`, 'success');
+                setConfirm(null);
+                await refresh(false);
+                return;
+            }
             {
                 const body = { id: entry.id, tag: entry.tag };
                 if (entry.type === 'code-template' && !entry.installedVersion) {
@@ -216,7 +235,39 @@ function useStoreActions(refresh) {
     };
 
     let overlay = null;
-    if (confirm) {
+    if (confirm && confirm.mode === 'remove') {
+        const entry = confirm.entry;
+        overlay = (
+            <ConfirmOverlay
+                title={`Remove ${entry.name}?`}
+                confirmLabel="Remove"
+                busy={busy}
+                onCancel={() => setConfirm(null)}
+                onConfirm={execute}>
+                <div>
+                    {entry.type === 'channel' ? (
+                        <p>
+                            Deletes the channel <strong>{entry.name}</strong> from this engine
+                            — <strong>including all of its message history</strong>. A deployed
+                            channel is refused: undeploy it in the Channels view first.
+                        </p>
+                    ) : entry.type === 'code-template-library' ? (
+                        <p>
+                            Deletes the library <strong>{entry.name}</strong> and <strong>all code
+                            templates it currently contains</strong> — including any you added to
+                            it after installing.
+                        </p>
+                    ) : (
+                        <p>
+                            Deletes the code template <strong>{entry.name}</strong> from this engine,
+                            including its library membership. The library itself is kept
+                            {entry.revoked ? '.' : ', and the package stays in Browse if you want to re-import it later.'}
+                        </p>
+                    )}
+                </div>
+            </ConfirmOverlay>
+        );
+    } else if (confirm) {
         const entry = confirm.entry;
         const content = isContentType(entry.type);
         const isCodeTemplate = entry.type === 'code-template' && !entry.installedVersion;
@@ -271,7 +322,7 @@ function useStoreActions(refresh) {
         );
     }
 
-    return { requestInstall, overlay };
+    return { requestInstall, requestRemove, overlay };
 }
 
 /* ------------------------------------------------------------------ */
@@ -386,6 +437,9 @@ function DetailView({ entry, onBack, actions }) {
                                     ? (entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? 'Re-import' : 'Import')
                                     : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
                             </button>
+                        ) : null}
+                        {isContentType(entry.type) && entry.installedVersion ? (
+                            <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
                         ) : null}
                         {!entry.installable ? (
                             <span className="hint">This type is not installable through the store yet.</span>
@@ -620,9 +674,11 @@ function InstalledView({ catalog, onSelect, actions }) {
                             {entry.updateAvailable ? (
                                 <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>Update</button>
                             ) : null}
-                            <span className="hint">Manage in {isContentType(entry.type)
-                                ? (TYPE_LABELS[entry.type] === 'Channel' ? 'Channels' : 'Code Templates')
-                                : 'Extensions'}</span>
+                            {isContentType(entry.type) ? (
+                                <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
+                            ) : (
+                                <span className="hint">Manage in Extensions</span>
+                            )}
                         </td>
                     </tr>
                 ))}

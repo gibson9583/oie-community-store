@@ -943,13 +943,15 @@ public class CatalogService {
         }
         try {
             CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
-            for (CodeTemplateLibrary library : controller.getLibraries(null, true)) {
+            // Library ids come from the library store; template ids come from the TEMPLATE
+            // store — NOT from library membership. Membership can dangle: the web admin
+            // deletes a template record immediately but commits the membership removal only
+            // on Save All, and a dangling member must not read as still installed.
+            for (CodeTemplateLibrary library : controller.getLibraries(null, false)) {
                 ids.add(library.getId());
-                if (library.getCodeTemplates() != null) {
-                    for (CodeTemplate template : library.getCodeTemplates()) {
-                        ids.add(template.getId());
-                    }
-                }
+            }
+            for (CodeTemplate template : controller.getCodeTemplates(null)) {
+                ids.add(template.getId());
             }
         } catch (Exception e) {
             logger.warn("Community Store: could not read installed code template ids: " + e.getMessage());

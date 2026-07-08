@@ -157,6 +157,31 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
     }
 
     @Override
+    public String removeContent(String requestJson) throws ClientException {
+        try {
+            JsonNode body = MAPPER.readTree(requestJson);
+            String id = body.path("id").asText(null);
+            if (id == null || id.isBlank()) {
+                throw new ClientException("An 'id' is required.");
+            }
+            // The engine id comes from the live entry when the package is still offered, or
+            // from the install ledger when it isn't (a revoked package being cleaned up).
+            ObjectNode entry = plugin().getCatalogService().findEntry(id);
+            JsonNode record = plugin().getSettings().getInstallLedger().get(id);
+            String type = entry != null ? entry.path("type").asText("") : (record != null ? record.path("type").asText("") : "");
+            String contentId = entry != null ? entry.path("contentId").asText("") : "";
+            if (contentId.isEmpty() && record != null) {
+                contentId = record.path("contentId").asText("");
+            }
+            return plugin().getInstallService().removeContent(id, type, contentId, getCurrentUserId()).toString();
+        } catch (ClientException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ClientException("Remove failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     public String install(String requestJson) throws ClientException {
         try {
             JsonNode body = MAPPER.readTree(requestJson);

@@ -16,6 +16,9 @@ on-ramp. The engine downloads, sha256-verifies, and installs everything itself.
   (restart required; uninstall from the engine's Extensions page); **content** (channels, code templates, code template libraries) is
   imported through the engine's APIs and takes effect immediately. A standalone code
   template asks which library to add it to — new or existing.
+- **Remove imported content** from the Installed tab: code templates (with their
+  library membership), libraries (with their member templates), and channels
+  (undeployed only — with their message history). Install records clear with them.
 - **sha256 verification** of every artifact before anything touches the engine,
   gated by the existing manage-extensions permission.
 - **Self-aware updates** — the store is listed in the catalog, so a newer release
