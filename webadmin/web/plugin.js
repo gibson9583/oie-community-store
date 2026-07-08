@@ -2118,6 +2118,19 @@ var STORE_CSS = `
    the whole pill to the next line instead. */
 .cs-store .tag { white-space: nowrap; }
 
+/* Confirmation overlay. Own class, NOT host Tailwind utilities: the host generates
+   utilities from ITS source scan, so a class no host file uses (e.g. inset-0) simply
+   does not exist in app.css \u2014 and this plugin's sources are never scanned. */
+.cs-overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1000;
+}
+
 /* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
    left bar, in light and dark themes. */
 table.dt tbody tr.cs-revoked,
@@ -2212,7 +2225,7 @@ function Badges({ entry }) {
   return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag text-accent" }, "Update ", entry.version) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
 }
 function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, busy }) {
-  return /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 flex items-center justify-center", style: { background: "rgba(0,0,0,0.45)", zIndex: 1e3 } }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
+  return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
 }
 function useStoreActions(refresh) {
   const [confirm, setConfirm] = React.useState(null);

@@ -1,7 +1,7 @@
 {
     "id": "community-store",
     "name": "Community Store",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "author": "Chris Gibson",
     "description": "Browse, install, and update community plugins from GitHub releases, verified and installed by the engine under the manage-extensions permission.",
     "enabled": true,
