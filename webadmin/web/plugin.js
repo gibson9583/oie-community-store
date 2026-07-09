@@ -2131,6 +2131,14 @@ var STORE_CSS = `
     z-index: 1000;
 }
 
+/* Update available: a calm green row tint + left bar (the pill carries the
+   detail; the row makes it scannable). Same mechanics as the revoked treatment. */
+.cs-store table.dt tbody tr.cs-update,
+.cs-store table.dt tbody tr.cs-update:hover {
+    background: color-mix(in srgb, var(--ok) 10%, var(--bg1)) !important;
+    box-shadow: inset 3px 0 0 var(--ok);
+}
+
 /* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
    left bar, in light and dark themes. */
 table.dt tbody tr.cs-revoked,
@@ -2222,7 +2230,7 @@ function TypeTag({ type }) {
   return /* @__PURE__ */ React.createElement("span", { className: "tag" }, TYPE_LABELS[type] || type);
 }
 function Badges({ entry }) {
-  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag text-accent" }, "Update ", entry.version) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
+  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag text-accent", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " \u2191") : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
 }
 function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, busy }) {
   return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
@@ -2391,7 +2399,19 @@ function CardsGrid({ entries, onSelect }) {
   return /* @__PURE__ */ React.createElement("div", { className: "grid gap-3", style: { gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" } }, entries.map((entry) => /* @__PURE__ */ React.createElement(EntryCard, { key: entry.id, entry, onSelect })));
 }
 function EntryRow({ entry, onSelect }) {
-  return /* @__PURE__ */ React.createElement("tr", { style: { cursor: "pointer" }, onClick: () => onSelect(entry) }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { className: "text-accent" }, entry.name)), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.version), /* @__PURE__ */ React.createElement("td", { className: "mono text-text-dim" }, entry.repo), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(Badges, { entry })));
+  return /* @__PURE__ */ React.createElement(
+    "tr",
+    {
+      style: { cursor: "pointer" },
+      className: entry.updateAvailable ? "cs-update" : void 0,
+      onClick: () => onSelect(entry)
+    },
+    /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { className: "text-accent" }, entry.name)),
+    /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })),
+    /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.version),
+    /* @__PURE__ */ React.createElement("td", { className: "mono text-text-dim" }, entry.repo),
+    /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(Badges, { entry }))
+  );
 }
 var TABLE_COLS = /* @__PURE__ */ React.createElement("colgroup", null, /* @__PURE__ */ React.createElement("col", null), /* @__PURE__ */ React.createElement("col", { style: { width: 170 } }), /* @__PURE__ */ React.createElement("col", { style: { width: 110 } }), /* @__PURE__ */ React.createElement("col", { style: { width: 320 } }), /* @__PURE__ */ React.createElement("col", { style: { width: 170 } }));
 var TABLE_HEAD = /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Name"), /* @__PURE__ */ React.createElement("th", null, "Type"), /* @__PURE__ */ React.createElement("th", null, "Version"), /* @__PURE__ */ React.createElement("th", null, "Repository"), /* @__PURE__ */ React.createElement("th", null, "Status")));
@@ -2448,7 +2468,7 @@ function InstalledView({ catalog, onSelect, actions }) {
   }
   return /* @__PURE__ */ React.createElement("div", null, revoked.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-err" }, revoked.length === 1 ? "An installed package is" : `${revoked.length} installed packages are`, " no longer offered by ", revoked.length === 1 ? "its" : "their", " source."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Removed or blocked packages keep running on this engine until you act \u2014 review the flagged rows below and uninstall anything you no longer trust from the Extensions page."))) : null, /* @__PURE__ */ React.createElement("table", { className: "dt" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Name"), /* @__PURE__ */ React.createElement("th", null, "Type"), /* @__PURE__ */ React.createElement("th", null, "Installed"), /* @__PURE__ */ React.createElement("th", null, "Available"), /* @__PURE__ */ React.createElement("th", null, "Repository"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, installed.map((entry) => (
     // Revoked rows get an unmissable red treatment: tinted row + badge.
-    /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: entry.revoked ? "cs-revoked" : void 0 }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { onClick: () => onSelect(entry), style: { cursor: "pointer" } }, entry.name), entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", style: { marginLeft: 8 }, title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "text-err" }, "\u2014") : entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, entry.version) : entry.version), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.repo), /* @__PURE__ */ React.createElement("td", { className: "flex gap-1 items-center" }, entry.updateAvailable ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestInstall(entry) }, "Update") : null, isContentType(entry.type) ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : /* @__PURE__ */ React.createElement("span", { className: "hint" }, "Manage in Extensions")))
+    /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: entry.revoked ? "cs-revoked" : entry.updateAvailable ? "cs-update" : void 0 }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { onClick: () => onSelect(entry), style: { cursor: "pointer" } }, entry.name), entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", style: { marginLeft: 8 }, title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "text-err" }, "\u2014") : entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, entry.version) : entry.version), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.repo), /* @__PURE__ */ React.createElement("td", { className: "flex gap-1 items-center" }, entry.updateAvailable ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestInstall(entry) }, "Update") : null, isContentType(entry.type) ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : /* @__PURE__ */ React.createElement("span", { className: "hint" }, "Manage in Extensions")))
   )))));
 }
 function SettingsView({ catalog, onSaved }) {

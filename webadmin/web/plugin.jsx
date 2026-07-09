@@ -35,6 +35,14 @@ const STORE_CSS = `
     z-index: 1000;
 }
 
+/* Update available: a calm green row tint + left bar (the pill carries the
+   detail; the row makes it scannable). Same mechanics as the revoked treatment. */
+.cs-store table.dt tbody tr.cs-update,
+.cs-store table.dt tbody tr.cs-update:hover {
+    background: color-mix(in srgb, var(--ok) 10%, var(--bg1)) !important;
+    box-shadow: inset 3px 0 0 var(--ok);
+}
+
 /* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
    left bar, in light and dark themes. */
 table.dt tbody tr.cs-revoked,
@@ -144,8 +152,11 @@ function TypeTag({ type }) {
 function Badges({ entry }) {
     return (
         <span className="flex gap-1 items-center flex-wrap">
-            {entry.installedVersion ? <span className="tag">Installed {entry.installedVersion}</span> : null}
-            {entry.updateAvailable ? <span className="tag text-accent">Update {entry.version}</span> : null}
+            {entry.installedVersion ? (
+                entry.updateAvailable
+                    ? <span className="tag text-accent" title={`Update available: ${entry.version}`}>Installed {entry.installedVersion} ↑</span>
+                    : <span className="tag">Installed {entry.installedVersion}</span>
+            ) : null}
             {entry.revoked ? (
                 <span className="tag text-err" title={entry.description}>
                     {entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}
@@ -507,7 +518,8 @@ function CardsGrid({ entries, onSelect }) {
 
 function EntryRow({ entry, onSelect }) {
     return (
-        <tr style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
+        <tr style={{ cursor: 'pointer' }} className={entry.updateAvailable ? 'cs-update' : undefined}
+            onClick={() => onSelect(entry)}>
             <td><a className="text-accent">{entry.name}</a></td>
             <td><TypeTag type={entry.type} /></td>
             <td className="mono">{entry.version}</td>
@@ -670,7 +682,7 @@ function InstalledView({ catalog, onSelect, actions }) {
             <tbody>
                 {installed.map((entry) => (
                     // Revoked rows get an unmissable red treatment: tinted row + badge.
-                    <tr key={entry.id} className={entry.revoked ? 'cs-revoked' : undefined}>
+                    <tr key={entry.id} className={entry.revoked ? 'cs-revoked' : entry.updateAvailable ? 'cs-update' : undefined}>
                         <td>
                             <a onClick={() => onSelect(entry)} style={{ cursor: 'pointer' }}>{entry.name}</a>
                             {entry.revoked ? (
