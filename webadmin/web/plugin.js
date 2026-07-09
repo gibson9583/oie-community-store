@@ -2135,8 +2135,22 @@ var STORE_CSS = `
    detail; the row makes it scannable). Same mechanics as the revoked treatment. */
 .cs-store table.dt tbody tr.cs-update,
 .cs-store table.dt tbody tr.cs-update:hover {
-    background: color-mix(in srgb, var(--ok) 10%, var(--bg1)) !important;
-    box-shadow: inset 3px 0 0 var(--ok);
+    background: color-mix(in srgb, var(--ok) 15%, var(--bg1)) !important;
+    box-shadow: inset 4px 0 0 var(--ok);
+}
+
+/* The update pill: green like its row (an accent-blue pill on a green row read
+   as two unrelated signals), bolder text, and a heavier arrow. */
+.cs-store .tag.cs-tag-update {
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+    font-weight: 700;
+}
+.cs-store .tag.cs-tag-update .cs-up {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
 }
 
 /* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
@@ -2230,7 +2244,7 @@ function TypeTag({ type }) {
   return /* @__PURE__ */ React.createElement("span", { className: "tag" }, TYPE_LABELS[type] || type);
 }
 function Badges({ entry }) {
-  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag text-accent", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " \u2191") : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
+  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag cs-tag-update", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-up" }, "\u2191")) : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
 }
 function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, busy }) {
   return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));

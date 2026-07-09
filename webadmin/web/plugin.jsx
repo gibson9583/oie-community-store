@@ -39,8 +39,22 @@ const STORE_CSS = `
    detail; the row makes it scannable). Same mechanics as the revoked treatment. */
 .cs-store table.dt tbody tr.cs-update,
 .cs-store table.dt tbody tr.cs-update:hover {
-    background: color-mix(in srgb, var(--ok) 10%, var(--bg1)) !important;
-    box-shadow: inset 3px 0 0 var(--ok);
+    background: color-mix(in srgb, var(--ok) 15%, var(--bg1)) !important;
+    box-shadow: inset 4px 0 0 var(--ok);
+}
+
+/* The update pill: green like its row (an accent-blue pill on a green row read
+   as two unrelated signals), bolder text, and a heavier arrow. */
+.cs-store .tag.cs-tag-update {
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+    font-weight: 700;
+}
+.cs-store .tag.cs-tag-update .cs-up {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
 }
 
 /* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
@@ -154,7 +168,7 @@ function Badges({ entry }) {
         <span className="flex gap-1 items-center flex-wrap">
             {entry.installedVersion ? (
                 entry.updateAvailable
-                    ? <span className="tag text-accent" title={`Update available: ${entry.version}`}>Installed {entry.installedVersion} ↑</span>
+                    ? <span className="tag cs-tag-update" title={`Update available: ${entry.version}`}>Installed {entry.installedVersion} <span className="cs-up">↑</span></span>
                     : <span className="tag">Installed {entry.installedVersion}</span>
             ) : null}
             {entry.revoked ? (
