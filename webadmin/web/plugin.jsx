@@ -140,6 +140,12 @@ const typeRank = (t) => { const i = TYPE_ORDER.indexOf(t); return i < 0 ? TYPE_O
 const CONTENT_TYPES = ['channel', 'code-template-library', 'code-template'];
 const isContentType = (t) => CONTENT_TYPES.includes(t);
 
+// Web store client: an entry is hidden IFF its offered version declares a UI surface
+// that does not include "web" (i.e. swing-only). Content (ui absent) and server-only /
+// ui-less extensions (ui []) are always shown. Engine min/max compatibility is a
+// separate filter and is unchanged.
+const showsInWebUi = (entry) => !(Array.isArray(entry.ui) && entry.ui.length && !entry.ui.includes('web'));
+
 // Normalize the engine's /codeTemplateLibraries response (XStream single-root + one-element-list
 // quirk) into a plain [{id, name}] list for the install-dialog library picker.
 function normalizeLibraries(resp) {
@@ -163,6 +169,15 @@ function TypeTag({ type }) {
     return <span className="tag">{TYPE_LABELS[type] || type}</span>;
 }
 
+function UiTag({ entry }) {
+    const ui = entry.ui;
+    if (!Array.isArray(ui)) return null;                 // content: no surface badge
+    if (ui.length === 0) return <span className="tag" title="Server-only extension (no UI)">Server</span>;
+    const label = ui.includes('web') && ui.includes('swing') ? 'Web + Swing'
+        : ui.includes('web') ? 'Web' : 'Swing';
+    return <span className="tag" title={`Ships UI for: ${ui.join(', ')}`}>{label}</span>;
+}
+
 function Badges({ entry }) {
     return (
         <span className="flex gap-1 items-center flex-wrap">
@@ -178,6 +193,7 @@ function Badges({ entry }) {
             ) : null}
             {!entry.compatible && !entry.revoked ? <span className="tag">Incompatible</span> : null}
             {entry.deprecated ? <span className="tag">Deprecated</span> : null}
+            <UiTag entry={entry} />
         </span>
     );
 }
@@ -593,7 +609,13 @@ function BrowseView({ catalog, onSelect }) {
     const setView = (v) => { setViewMode(v); setPref('view', v); };
     const setGroup = (g) => { setGroupByType(g); setPref('group', g ? '1' : '0'); };
 
-    const entries = (catalog.entries || []).filter((entry) => {
+    // Web store client: hide entries whose offered version ships a UI that isn't web
+    // (swing-only). Content (ui absent) and server-only / ui-less (ui []) are kept.
+    // Everything below (entries, type dropdown, "N of M" count) derives from this so
+    // hidden swing-only entries never leak into any downstream count.
+    const visible = (catalog.entries || []).filter(showsInWebUi);
+
+    const entries = visible.filter((entry) => {
         if (entry.revoked) return false;   // surfaced on the Installed tab, not browseable
         if (typeFilter && entry.type !== typeFilter) return false;
         if (!search) return true;
@@ -601,7 +623,7 @@ function BrowseView({ catalog, onSelect }) {
         return haystack.includes(search.toLowerCase());
     });
 
-    const types = [...new Set((catalog.entries || []).map((e) => e.type))]
+    const types = [...new Set(visible.map((e) => e.type))]
         .sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b));
 
     const render = (list) => viewMode === 'table'
@@ -617,7 +639,7 @@ function BrowseView({ catalog, onSelect }) {
                     <option value="">All types</option>
                     {types.map((t) => <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>)}
                 </select>
-                <span className="text-text-dim">{entries.length} of {(catalog.entries || []).length} item(s)</span>
+                <span className="text-text-dim">{entries.length} of {visible.length} item(s)</span>
                 <div className="ml-auto flex items-center gap-3">
                     <label className="flex items-center gap-1.5 text-text-dim" style={{ cursor: 'pointer' }}>
                         <input type="checkbox" checked={groupByType} onChange={(e) => setGroup(e.target.checked)} />
@@ -667,7 +689,7 @@ function BrowseView({ catalog, onSelect }) {
 /* ------------------------------------------------------------------ */
 
 function InstalledView({ catalog, onSelect, actions }) {
-    const installed = (catalog.entries || []).filter((e) => e.installedVersion);
+    const installed = (catalog.entries || []).filter((e) => e.installedVersion && showsInWebUi(e));
     const revoked = installed.filter((e) => e.revoked);
     if (installed.length === 0) {
         return <div className="panel"><div className="panel-body text-text-dim">
@@ -918,7 +940,7 @@ function CommunityStoreView() {
 
     const actions = useStoreActions(refresh);
 
-    const updates = catalog ? (catalog.entries || []).filter((e) => e.updateAvailable).length : 0;
+    const updates = catalog ? (catalog.entries || []).filter((e) => e.updateAvailable && showsInWebUi(e)).length : 0;
 
     const banners = (
         <>

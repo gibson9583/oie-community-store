@@ -402,6 +402,13 @@ public class CatalogService {
         entry.put("homepage", pkg.path("homepage").asText(repository));
         entry.put("documentation", pkg.path("documentation").asText(""));
         entry.put("docsUrl", offered.path("docsUrl").asText(""));
+        // UI surfaces the offered version ships (["web","swing"] / ["web"] / ["swing"] / []).
+        // Carried verbatim from the trusted, already-validated index; absent stays absent so
+        // the client can distinguish content (no ui) from a server-only extension (ui []).
+        JsonNode ui = offered.path("ui");
+        if (ui.isArray()) {
+            entry.set("ui", ui.deepCopy());
+        }
         entry.put("storeDocs", "");
         entry.put("license", pkg.path("license").asText(""));
         entry.put("deprecated", pkg.path("deprecated").asBoolean(false));

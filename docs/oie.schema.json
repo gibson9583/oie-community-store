@@ -32,7 +32,12 @@
                 "keywords": { "type": "array", "items": { "type": "string" } },
                 "deprecated": { "type": "boolean" },
                 "deprecationMessage": { "type": "string" },
-                "restartRequired": { "type": "boolean" }
+                "restartRequired": { "type": "boolean" },
+                "ui": {
+                    "description": "UI surfaces the package ships: 'web' (web administrator) and/or 'swing' (Swing Administrator). An empty array means server-only (no UI). Omit the field to be shown in both stores.",
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["web", "swing"] }
+                }
             }
         },
         "single": {

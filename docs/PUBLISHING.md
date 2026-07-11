@@ -73,6 +73,7 @@ if it changed) in the same commit you tag.
     "name": "SQS Source Connector",
     "description": "Consume messages from Amazon SQS queues as a channel source.",
     "type": "connector",
+    "ui": ["web", "swing"],
     "version": "1.4.0",
     "minEngineVersion": "4.5.0",
     "maxEngineVersion": null,
@@ -97,6 +98,7 @@ if it changed) in the same commit you tag.
 | `name` | ✓ | Display name in the store. |
 | `description` |  | One or two sentences. |
 | `type` | ✓ | `connector`, `plugin`, `datatype`, `channel`, `code-template`, or `code-template-library`. See [Types](#types). |
+| `ui` |  | UI surfaces the package ships: `["web"]`, `["swing"]`, `["web", "swing"]`, or `[]` for a server-only package with no UI. Omit it to be shown in both stores. |
 | `version` | ✓ | **Must equal the release tag**, minus an optional leading `v` (tag `v1.4.0` → `1.4.0`). Must be semver-comparable so the store can detect updates. |
 | `minEngineVersion` |  | Lowest engine version supported (inclusive). Omit or `null` for no lower bound. |
 | `maxEngineVersion` |  | Highest engine version supported (inclusive). Omit or `null` for no upper bound. |

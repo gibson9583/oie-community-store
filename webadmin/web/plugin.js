@@ -2219,6 +2219,7 @@ var typeRank = (t) => {
 };
 var CONTENT_TYPES = ["channel", "code-template-library", "code-template"];
 var isContentType = (t) => CONTENT_TYPES.includes(t);
+var showsInWebUi = (entry) => !(Array.isArray(entry.ui) && entry.ui.length && !entry.ui.includes("web"));
 function normalizeLibraries(resp) {
   let node = resp && resp.list !== void 0 ? resp.list : resp;
   let arr = node && node.codeTemplateLibrary;
@@ -2243,8 +2244,15 @@ function setPref(key, value) {
 function TypeTag({ type }) {
   return /* @__PURE__ */ React.createElement("span", { className: "tag" }, TYPE_LABELS[type] || type);
 }
+function UiTag({ entry }) {
+  const ui = entry.ui;
+  if (!Array.isArray(ui)) return null;
+  if (ui.length === 0) return /* @__PURE__ */ React.createElement("span", { className: "tag", title: "Server-only extension (no UI)" }, "Server");
+  const label = ui.includes("web") && ui.includes("swing") ? "Web + Swing" : ui.includes("web") ? "Web" : "Swing";
+  return /* @__PURE__ */ React.createElement("span", { className: "tag", title: `Ships UI for: ${ui.join(", ")}` }, label);
+}
 function Badges({ entry }) {
-  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag cs-tag-update", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-up" }, "\u2191")) : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
+  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag cs-tag-update", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-up" }, "\u2191")) : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null, /* @__PURE__ */ React.createElement(UiTag, { entry }));
 }
 function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, busy }) {
   return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
@@ -2448,14 +2456,15 @@ function BrowseView({ catalog, onSelect }) {
     setGroupByType(g);
     setPref("group", g ? "1" : "0");
   };
-  const entries = (catalog.entries || []).filter((entry) => {
+  const visible = (catalog.entries || []).filter(showsInWebUi);
+  const entries = visible.filter((entry) => {
     if (entry.revoked) return false;
     if (typeFilter && entry.type !== typeFilter) return false;
     if (!search) return true;
     const haystack = `${entry.name} ${entry.description} ${entry.repo} ${(entry.keywords || []).join(" ")}`.toLowerCase();
     return haystack.includes(search.toLowerCase());
   });
-  const types = [...new Set((catalog.entries || []).map((e) => e.type))].sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b));
+  const types = [...new Set(visible.map((e) => e.type))].sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b));
   const render = (list2) => viewMode === "table" ? /* @__PURE__ */ React.createElement(EntryTable, { entries: list2, onSelect }) : /* @__PURE__ */ React.createElement(CardsGrid, { entries: list2, onSelect });
   return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center mb-3 flex-wrap" }, /* @__PURE__ */ React.createElement(
     "input",
@@ -2466,7 +2475,7 @@ function BrowseView({ catalog, onSelect }) {
       value: search,
       onChange: (e) => setSearch(e.target.value)
     }
-  ), /* @__PURE__ */ React.createElement("select", { className: "field", style: { maxWidth: 200 }, value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All types"), types.map((t) => /* @__PURE__ */ React.createElement("option", { key: t, value: t }, TYPE_LABELS[t] || t))), /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, entries.length, " of ", (catalog.entries || []).length, " item(s)"), /* @__PURE__ */ React.createElement("div", { className: "ml-auto flex items-center gap-3" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-1.5 text-text-dim", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: groupByType, onChange: (e) => setGroup(e.target.checked) }), "Group by type"), /* @__PURE__ */ React.createElement("div", { className: "flex" }, /* @__PURE__ */ React.createElement("button", { className: `btn btn-sm ${viewMode === "cards" ? "btn-primary" : ""}`, onClick: () => setView("cards") }, "Cards"), /* @__PURE__ */ React.createElement("button", { className: `btn btn-sm ${viewMode === "table" ? "btn-primary" : ""}`, onClick: () => setView("table") }, "Table")))), entries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-text-dim" }, "No items match. Sources may still be syncing, or none are configured; check Settings.")) : groupByType ? (() => {
+  ), /* @__PURE__ */ React.createElement("select", { className: "field", style: { maxWidth: 200 }, value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All types"), types.map((t) => /* @__PURE__ */ React.createElement("option", { key: t, value: t }, TYPE_LABELS[t] || t))), /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, entries.length, " of ", visible.length, " item(s)"), /* @__PURE__ */ React.createElement("div", { className: "ml-auto flex items-center gap-3" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-1.5 text-text-dim", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: groupByType, onChange: (e) => setGroup(e.target.checked) }), "Group by type"), /* @__PURE__ */ React.createElement("div", { className: "flex" }, /* @__PURE__ */ React.createElement("button", { className: `btn btn-sm ${viewMode === "cards" ? "btn-primary" : ""}`, onClick: () => setView("cards") }, "Cards"), /* @__PURE__ */ React.createElement("button", { className: `btn btn-sm ${viewMode === "table" ? "btn-primary" : ""}`, onClick: () => setView("table") }, "Table")))), entries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-text-dim" }, "No items match. Sources may still be syncing, or none are configured; check Settings.")) : groupByType ? (() => {
     const groups = types.filter((t) => entries.some((e) => e.type === t)).map((t) => ({ type: t, entries: entries.filter((e) => e.type === t) }));
     if (viewMode === "table") {
       return /* @__PURE__ */ React.createElement(GroupedTable, { groups, onSelect });
@@ -2475,7 +2484,7 @@ function BrowseView({ catalog, onSelect }) {
   })() : render(entries));
 }
 function InstalledView({ catalog, onSelect, actions }) {
-  const installed = (catalog.entries || []).filter((e) => e.installedVersion);
+  const installed = (catalog.entries || []).filter((e) => e.installedVersion && showsInWebUi(e));
   const revoked = installed.filter((e) => e.revoked);
   if (installed.length === 0) {
     return /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-text-dim" }, "No store-tracked extensions are installed. Extensions installed manually appear here once their repository is listed in a configured source and the ids match."));
@@ -2599,7 +2608,7 @@ function CommunityStoreView() {
     refresh(false);
   }, []);
   const actions = useStoreActions(refresh);
-  const updates = catalog ? (catalog.entries || []).filter((e) => e.updateAvailable).length : 0;
+  const updates = catalog ? (catalog.entries || []).filter((e) => e.updateAvailable && showsInWebUi(e)).length : 0;
   const banners = /* @__PURE__ */ React.createElement(React.Fragment, null, error ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, "Could not load the store catalog."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, error), /* @__PURE__ */ React.createElement("div", { className: "hint mt-1" }, "The Community Store requires the manage-extensions permission, the same permission used to install extensions manually."))) : null, catalog && (catalog.errors || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mb-1" }, "Some sources failed to sync:"), catalog.errors.map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "mono text-[12px]" }, e.source, ": ", e.message)))) : null);
   return /* @__PURE__ */ React.createElement("div", { className: "view cs-store flex flex-col flex-1 min-h-0" }, /* @__PURE__ */ React.createElement("style", null, STORE_CSS), actions.overlay, selected ? /* @__PURE__ */ React.createElement("div", { className: "view-body" }, banners, /* @__PURE__ */ React.createElement(DetailView, { entry: selected, onBack: () => setSelected(null), actions })) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tabs flex-none" }, /* @__PURE__ */ React.createElement("button", { className: `tab ${tab === "browse" ? "active" : ""}`, onClick: () => setTab("browse") }, "Browse"), /* @__PURE__ */ React.createElement("button", { className: `tab ${tab === "installed" ? "active" : ""}`, onClick: () => setTab("installed") }, "Installed", updates > 0 ? ` (${updates})` : ""), /* @__PURE__ */ React.createElement("button", { className: `tab ${tab === "settings" ? "active" : ""}`, onClick: () => setTab("settings") }, "Settings"), /* @__PURE__ */ React.createElement("div", { className: "ml-auto flex items-center gap-2 pr-2" }, catalog && catalog.engineVersion ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim text-[12px]" }, "Engine ", catalog.engineVersion) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => refresh(true), disabled: loading }, loading ? "Syncing\u2026" : "Sync now"))), /* @__PURE__ */ React.createElement("div", { className: "view-body" }, banners, tab === "browse" && catalog ? /* @__PURE__ */ React.createElement(BrowseView, { catalog, onSelect: setSelected }) : null, tab === "installed" && catalog ? /* @__PURE__ */ React.createElement(InstalledView, { catalog, onSelect: setSelected, actions }) : null, tab === "settings" ? /* @__PURE__ */ React.createElement(SettingsView, { catalog, onSaved: () => refresh(true) }) : null, loading && !catalog ? /* @__PURE__ */ React.createElement("div", { className: "text-text-dim" }, "Loading catalog\u2026") : null)));
 }

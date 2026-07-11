@@ -28,6 +28,7 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       sha256: ${{ steps.pkg.outputs.sha256 }}
       minengine: ${{ steps.pkg.outputs.minengine }}
+      ui: ${{ steps.pkg.outputs.ui }}
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +70,7 @@ jobs:
         run: |
           tar xzf "$OIE_TARBALL"
           test -f "$GITHUB_WORKSPACE/oie/server-lib/mirth-server.jar"
+          test -f "$GITHUB_WORKSPACE/oie/client-lib/mirth-client.jar"
           echo "OIE_HOME=$GITHUB_WORKSPACE/oie" >> "$GITHUB_ENV"
 
       # Stamp the tag version everywhere the artifact reports it, so installed
@@ -100,6 +102,7 @@ jobs:
           echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "out/${ASSET}.sha256")" >> "$GITHUB_OUTPUT"
           echo "minengine=$(jq -r '.minEngineVersion // "4.6.0"' oie.json)" >> "$GITHUB_OUTPUT"
+          echo "ui=$(jq -c '.ui // empty' oie.json)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release with assets
         uses: softprops/action-gh-release@v2
@@ -124,6 +127,7 @@ jobs:
       VERSION: ${{ needs.release.outputs.version }}
       SHA256: ${{ needs.release.outputs.sha256 }}
       MIN_ENGINE: ${{ needs.release.outputs.minengine }}
+      UI: ${{ needs.release.outputs.ui }}
       GH_TOKEN: ${{ secrets.CATALOG_TOKEN }}
     steps:
       - name: Require the catalog token
@@ -158,6 +162,13 @@ jobs:
               "docsUrl": "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/docs/store.md"
           }
           EOF
+          # Carry the tagged oie.json's ui surfaces into the manifest; omit the key
+          # entirely when oie.json does not declare ui.
+          if [ -n "$UI" ]; then
+            jq --indent 4 --argjson ui "$UI" '. + { ui: $ui }' \
+              "manifests/plugins/communitystore/${VERSION}.json" > /tmp/manifest.json
+            mv /tmp/manifest.json "manifests/plugins/communitystore/${VERSION}.json"
+          fi
 
       - name: Validate (schema + digest download)
         run: node scripts/build-index.mjs --lint --verify "manifests/plugins/communitystore/${VERSION}.json"

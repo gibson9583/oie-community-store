@@ -51,6 +51,7 @@ jobs:
         run: |
           tar xzf "$OIE_TARBALL"
           test -f "$GITHUB_WORKSPACE/oie/server-lib/mirth-server.jar"
+          test -f "$GITHUB_WORKSPACE/oie/client-lib/mirth-client.jar"
           echo "OIE_HOME=$GITHUB_WORKSPACE/oie" >> "$GITHUB_ENV"
 
       # Compiles the jar, builds the web frontend (plugin.jsx -> plugin.js via the

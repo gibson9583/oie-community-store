@@ -16,6 +16,10 @@
             <outputDirectory>communitystore</outputDirectory>
         </file>
         <file>
+            <source>${project.build.directory}/communitystore-client.jar</source>
+            <outputDirectory>communitystore</outputDirectory>
+        </file>
+        <file>
             <source>webadmin/plugin.json</source>
             <outputDirectory>communitystore/webadmin</outputDirectory>
         </file>

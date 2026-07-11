@@ -6,7 +6,7 @@
 
     <groupId>org.openintegrationengine.plugins</groupId>
     <artifactId>communitystore</artifactId>
-    <version>0.7.3</version>
+    <version>0.7.4</version>
     <packaging>jar</packaging>
 
     <name>OIE Community Store</name>
@@ -35,6 +35,25 @@
             <version>4.6.0</version>
             <scope>system</scope>
             <systemPath>${oie.home}/server-lib/mirth-client-core.jar</systemPath>
+        </dependency>
+        <!-- Swing Administrator client API (PlatformUI, AbstractSettingsPanel, SettingsPanelPlugin,
+             MirthTable, UIConstants). Lives in the distribution's client-lib, loaded by the client
+             classloader at runtime; compiled here against the install copy. -->
+        <dependency>
+            <groupId>com.mirth.connect</groupId>
+            <artifactId>mirth-client</artifactId>
+            <version>4.6.0</version>
+            <scope>system</scope>
+            <systemPath>${oie.home}/client-lib/mirth-client.jar</systemPath>
+        </dependency>
+        <!-- swingx (HighlighterFactory) transitively used by MirthTable striping; provided by
+             the engine's client-lib at runtime, compiled against the install copy. -->
+        <dependency>
+            <groupId>org.swinglabs</groupId>
+            <artifactId>swingx-core</artifactId>
+            <version>1.6.2</version>
+            <scope>system</scope>
+            <systemPath>${oie.home}/client-lib/swingx-core-1.6.2.jar</systemPath>
         </dependency>
         <!-- Transitively referenced engine jars needed at compile time (Encryptor via
              ConfigurationController.getEncryptor(); donkey Event as ServerEvent's supertype). -->
@@ -89,6 +108,38 @@
     <build>
         <finalName>communitystore-shared</finalName>
         <plugins>
+            <!-- Split the compiled classes into two jars loaded by different classloaders:
+                 communitystore-shared.jar  (server + client) — everything except the ui package,
+                 communitystore-client.jar  (client only)      — the ui package's Swing classes,
+                 so the Swing/PlatformUI references never reach the server classloader. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <id>default-jar</id>
+                        <configuration>
+                            <excludes>
+                                <exclude>org/openintegrationengine/plugins/communitystore/ui/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>client-jar</id>
+                        <phase>package</phase>
+                        <goals><goal>jar</goal></goals>
+                        <configuration>
+                            <classifier>client</classifier>
+                            <finalName>communitystore</finalName>
+                            <includes>
+                                <include>org/openintegrationengine/plugins/communitystore/ui/**</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Build the web administrator half (webadmin/web/plugin.jsx -> plugin.js) during package. -->
             <plugin>
                 <groupId>com.github.eirslett</groupId>

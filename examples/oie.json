@@ -4,6 +4,7 @@
     "name": "SQS Source Connector",
     "description": "Consume messages from Amazon SQS queues as a channel source.",
     "type": "connector",
+    "ui": ["web", "swing"],
     "version": "1.4.0",
     "minEngineVersion": "4.5.0",
     "maxEngineVersion": null,
