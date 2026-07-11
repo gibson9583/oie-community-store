@@ -169,15 +169,6 @@ function TypeTag({ type }) {
     return <span className="tag">{TYPE_LABELS[type] || type}</span>;
 }
 
-function UiTag({ entry }) {
-    const ui = entry.ui;
-    if (!Array.isArray(ui)) return null;                 // content: no surface badge
-    if (ui.length === 0) return <span className="tag" title="Server-only extension (no UI)">Server</span>;
-    const label = ui.includes('web') && ui.includes('swing') ? 'Web + Swing'
-        : ui.includes('web') ? 'Web' : 'Swing';
-    return <span className="tag" title={`Ships UI for: ${ui.join(', ')}`}>{label}</span>;
-}
-
 function Badges({ entry }) {
     return (
         <span className="flex gap-1 items-center flex-wrap">
@@ -193,7 +184,6 @@ function Badges({ entry }) {
             ) : null}
             {!entry.compatible && !entry.revoked ? <span className="tag">Incompatible</span> : null}
             {entry.deprecated ? <span className="tag">Deprecated</span> : null}
-            <UiTag entry={entry} />
         </span>
     );
 }
