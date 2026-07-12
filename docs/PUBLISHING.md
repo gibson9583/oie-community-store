@@ -125,8 +125,12 @@ All six types install through the store, by two different mechanisms:
 * **Content** — `channel`, `code-template`, `code-template-library`: XML exports
   **imported** through the engine's own APIs; they take effect **immediately**, no
   restart. A standalone `code-template` prompts the user to add it to a new or
-  existing library at install time. Content is published via a **collection
-  manifest** (see [Content collections](#content-collections)).
+  existing library at install time, and can be published as a plain **`.js` file**
+  instead of an XML export (see
+  [Code templates as raw JS files](#code-templates-as-raw-js-files)). Content is
+  published via a **collection manifest** (see
+  [Content collections](#content-collections)) and installs as a snapshot the user
+  owns from then on (see [Content is a snapshot](#content-is-a-snapshot)).
 
 ---
 
@@ -163,10 +167,15 @@ Per item:
 * **`id`** — stable, store-wide unique id for the item.
 * **`type`** — `channel`, `code-template`, or `code-template-library` (extension
   types are allowed too, but usually belong in single manifests).
-* **`artifact`** — repo-relative path of the installable XML, written as a plain
-  path (spaces are fine; the store URL-encodes it). Fetched raw at the release tag.
+* **`artifact`** — repo-relative path of the installable file — an engine XML
+  export, or a `.js` file for code templates (see
+  [Code templates as raw JS files](#code-templates-as-raw-js-files)) — written as a
+  plain path (spaces are fine; the store URL-encodes it). Fetched raw at the
+  release tag.
 * **`contentId`** — the engine id (UUID) inside the artifact. This is how the store
-  detects the item is installed; content items should always declare it.
+  detects the item is installed and how code-template upgrades find the object to
+  update; content items should always declare it and keep it stable across
+  versions.
 * **`storeDocs`** — repo-relative markdown rendered in the item's detail view.
   Convention: a `README.md` in the same folder as the artifact.
 * `name`, `description`, `minEngineVersion`/`maxEngineVersion`, `documentation`,
@@ -179,6 +188,65 @@ a collection manifest from the **default branch tip** — publishing is just a p
 content to that tag.) Since branch content is mutable, prefer submitting content to
 the [community catalog](https://github.com/gibson9583/oie-community-catalog), where
 each version carries a `sha256` that the engine verifies before import.
+
+### Content is a snapshot
+
+Installing content **imports a copy** into the user's engine. From that moment the
+copy is theirs to edit, and the store never modifies or deletes it without asking.
+When you publish a new version, the two kinds of content behave differently:
+**channels never upgrade in place** — the store shows users that a newer snapshot
+is available and offers to install it as a separate copy alongside whatever they
+have. **Code templates and libraries** offer an in-place upgrade, with modification
+protection: a user who has edited their installed copy is warned before anything is
+overwritten and can take the new version as a copy instead.
+
+### Code templates as raw JS files
+
+A code template does not have to be an engine XML export — you can publish the
+function itself as a single **`.js` file**, and the store wraps it into a code
+template at install time.
+
+```js
+/**
+	Formats an HL7 TS value (YYYYMMDDHHMMSS) as ISO-8601.
+
+	@param {String} ts - The HL7 timestamp to convert.
+	@return {String} The ISO-8601 representation.
+*/
+function formatHl7Timestamp(ts) {
+    // ...
+}
+```
+
+Declare it as a normal content item whose artifact ends in `.js`:
+
+```json
+{
+    "id": "format-hl7-timestamp",
+    "type": "code-template",
+    "name": "Format HL7 Timestamp",
+    "description": "Formats HL7 TS values as ISO-8601.",
+    "contentId": "0b9e2f43-6a4e-45c1-9f6d-2f6d3c1a7e58",
+    "artifact": "CodeTemplates/format-hl7-timestamp-{version}.js"
+}
+```
+
+Rules:
+
+* **`type`** must be `code-template`; one function file per item.
+* **`contentId`** is a UUID you generate **once** (e.g. with `uuidgen`) and never
+  change — it is the template's identity across versions, letting the store see
+  that the template is installed and offer upgrades. Changing it makes the next
+  version look like a brand-new template.
+* The artifact's filename must end in **`.js`** (after `{version}` substitution, so
+  `my-fn-{version}.js` works).
+* Start the file with a **JSDoc block** — the engine parses it into the template's
+  description, shown in the administrators and in code auto-completion.
+* At install, the file's contents become the template code verbatim, the manifest
+  `name` becomes the template name, and the result is a standard **function**
+  template the user can use like any other. When you publish a new version, the
+  upgrade replaces **only the code**, so a user's local adjustments (name, context
+  settings) survive.
 
 ---
 
@@ -284,6 +352,12 @@ recommended, platform-agnostic path):
    on **any** https host, not just GitHub. CI verifies the digest before merge, and
    every connected store picks the package up on its next sync. See the catalog
    README for the manifest shape.
+
+   If your artifact is a GitHub release asset, you can **automate this**: the
+   catalog hosts a reusable workflow that files the PR for you on every release —
+   copy one caller file and add one secret. See
+   ["Publishing automatically"](https://github.com/gibson9583/oie-community-catalog#publishing-automatically-reusable-workflow)
+   in the catalog README.
 
 2. **Account + topic (self-service).** If your repository lives under an account
    listed as an `org` source — a GitHub **organization or a personal user account**

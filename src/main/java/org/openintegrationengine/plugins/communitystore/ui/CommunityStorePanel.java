@@ -38,7 +38,7 @@ import com.mirth.connect.client.ui.components.MirthTable;
 /**
  * The Community Store browse panel, hosted as a Settings-area tab. Lists catalog entries in a
  * table (left), shows publisher documentation and a details block (right), and offers
- * Install / Update / Remove actions in a bottom button bar.
+ * Install / Update / Install as Copy / Remove actions in a bottom button bar.
  *
  * <p>All engine calls go through {@link StoreServletClient} off the EDT ({@link SwingWorker});
  * UI mutations happen only in {@code done()}. The shared-contract UI surface filter
@@ -63,6 +63,7 @@ class CommunityStorePanel extends AbstractSettingsPanel {
 
     private JButton installButton;
     private JButton updateButton;
+    private JButton copyButton;
     private JButton removeButton;
     private JButton settingsButton;
 
@@ -164,13 +165,18 @@ class CommunityStorePanel extends AbstractSettingsPanel {
 
         installButton = new JButton("Install");
         installButton.setEnabled(false);
-        installButton.addActionListener(e -> install(false));
+        installButton.addActionListener(e -> installSelected());
         right.add(installButton);
 
         updateButton = new JButton("Update");
         updateButton.setEnabled(false);
-        updateButton.addActionListener(e -> install(true));
+        updateButton.addActionListener(e -> updateSelected());
         right.add(updateButton);
+
+        copyButton = new JButton("Install as Copy");
+        copyButton.setEnabled(false);
+        copyButton.addActionListener(e -> installChannelCopy());
+        right.add(copyButton);
 
         removeButton = new JButton("Remove");
         removeButton.setEnabled(false);
@@ -301,13 +307,24 @@ class CommunityStorePanel extends AbstractSettingsPanel {
     private void updateButtonStates() {
         StoreEntry e = selectedEntry();
         if (e == null) {
+            installButton.setText("Install");
             installButton.setEnabled(false);
             updateButton.setEnabled(false);
+            copyButton.setEnabled(false);
             removeButton.setEnabled(false);
             return;
         }
-        installButton.setEnabled(e.installable && e.compatible && !e.isInstalled());
-        updateButton.setEnabled(e.updateAvailable);
+        // Installed content (never channels — snapshot-only) with no newer version can be
+        // re-imported through the drift gate; the button relabels so the affordance
+        // matches the web details pane exactly.
+        boolean reimport = e.isContent() && e.isInstalled() && !"channel".equals(e.type) && !e.updateAvailable;
+        installButton.setText(reimport ? "Re-import" : "Install");
+        installButton.setEnabled(e.installable && e.compatible && (!e.isInstalled() || reimport));
+        // Channels are snapshot-only: the server already forces updateAvailable=false for
+        // them, but the gate is explicit so Update can never appear for a channel.
+        updateButton.setEnabled(e.updateAvailable && !"channel".equals(e.type));
+        // A newer channel snapshot can only be brought in as an untracked copy.
+        copyButton.setEnabled("channel".equals(e.type) && !e.newerSnapshot.isEmpty());
         // Only installed content can be removed store-side; extensions go through the
         // engine's native Extensions page, exactly as the web UI does.
         removeButton.setEnabled(e.isContent() && e.isInstalled());
@@ -317,6 +334,23 @@ class CommunityStorePanel extends AbstractSettingsPanel {
     // Actions
     // ---------------------------------------------------------------------
 
+    /**
+     * Install-button flow: a fresh entry installs; installed content re-imports through
+     * the same drift gate as Update, mirroring the web details pane exactly. Channels
+     * never get here installed (the button stays disabled for them — snapshot-only).
+     */
+    private void installSelected() {
+        final StoreEntry e = selectedEntry();
+        if (e == null) {
+            return;
+        }
+        if (e.isContent() && e.isInstalled() && !"channel".equals(e.type)) {
+            confirmContentReplace(e);
+            return;
+        }
+        install(false);
+    }
+
     private void install(boolean update) {
         final StoreEntry e = selectedEntry();
         if (e == null) {
@@ -325,22 +359,145 @@ class CommunityStorePanel extends AbstractSettingsPanel {
 
         // A fresh standalone code-template must be placed in a library; ask which one.
         // Updates / re-imports keep their existing membership, so skip the dialog.
-        final String[] libChoice = {null, null}; // [newLibrary, targetLibraryId]
+        String newLibrary = null;
+        String targetLibraryId = null;
         if (!update && "code-template".equals(e.type) && !e.isInstalled()) {
             InstallDialog dialog = new InstallDialog(PlatformUI.MIRTH_FRAME, e.name);
             dialog.setVisible(true);
             if (!dialog.isConfirmed()) {
                 return;
             }
-            libChoice[0] = dialog.getNewLibrary();
-            libChoice[1] = dialog.getTargetLibraryId();
+            newLibrary = dialog.getNewLibrary();
+            targetLibraryId = dialog.getTargetLibraryId();
         }
 
+        runInstall(e, null, newLibrary, targetLibraryId,
+                "Imported " + e.name + ". It's available now.");
+    }
+
+    /**
+     * Update flow for the selected entry. Extensions keep the plain reinstall behavior
+     * (the web UI routes them identically); content — code templates and libraries —
+     * shares the drift-aware Re-import gate. Channels never reach here (Update is never
+     * enabled for them).
+     */
+    private void updateSelected() {
+        final StoreEntry e = selectedEntry();
+        if (e == null || !e.updateAvailable || "channel".equals(e.type)) {
+            return;
+        }
+
+        if (!e.isContent()) {
+            install(true);
+            return;
+        }
+
+        confirmContentReplace(e);
+    }
+
+    /**
+     * Drift-aware replace gate for installed content (code templates and libraries),
+     * shared by Update and Re-import so both UIs behave identically (see
+     * {@code webadmin/web/plugin.jsx}): pristine gets one confirm and an in-place
+     * {@code mode=upgrade} (membership kept, pristine hash refreshed); modified offers
+     * Overwrite / Install as new copy / Cancel. A pre-tracking install
+     * ({@code driftTracked=false}) reports modified — the store cannot tell — and the
+     * dialog wording says so.
+     */
+    private void confirmContentReplace(StoreEntry e) {
+        boolean sameVersion = !e.updateAvailable;
+        String noun = "code-template-library".equals(e.type) ? "library" : "template";
+        String successMessage = sameVersion
+                ? "Re-imported " + e.name + "."
+                : "Upgraded " + e.name + " to v" + e.version + ".";
+
+        if (!e.modified) {
+            int confirm = JOptionPane.showConfirmDialog(this,
+                    sameVersion
+                            ? "Re-import \"" + e.name + "\" v" + e.version + "?"
+                            : "Upgrade \"" + e.name + "\" to v" + e.version + "?",
+                    sameVersion ? "Confirm Re-import" : "Confirm Upgrade",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+            if (confirm == JOptionPane.YES_OPTION) {
+                runInstall(e, "upgrade", null, null, successMessage);
+            }
+            return;
+        }
+
+        Object[] options = {"Overwrite", "Install as new copy", "Cancel"};
+        String message = (e.driftTracked
+                ? "You've modified this " + noun + " since installing it.\n"
+                : "This " + noun + " was installed before change tracking — the store\n"
+                        + "can't tell whether you've modified it.\n")
+                + "Overwrite replaces " + (e.driftTracked ? "your changes" : "whatever is there")
+                + " with v" + e.version + ";\n"
+                + "Install as new copy keeps " + (e.driftTracked ? "yours." : "what's installed.");
+        int choice = JOptionPane.showOptionDialog(this,
+                message,
+                e.driftTracked ? "Modified Since Install" : "Possibly Modified",
+                JOptionPane.YES_NO_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null, options, options[2]);
+        if (choice == 0) {
+            runInstall(e, "upgrade", null, null, successMessage);
+        } else if (choice == 1) {
+            installContentCopy(e);
+        }
+    }
+
+    /**
+     * Imports the offered version of a content entry as an untracked copy
+     * ({@code mode=copy}): a standalone code-template needs library placement, so the
+     * install dialog asks; libraries and channels copy without further input.
+     */
+    private void installContentCopy(StoreEntry e) {
+        String newLibrary = null;
+        String targetLibraryId = null;
+        if ("code-template".equals(e.type)) {
+            InstallDialog dialog = new InstallDialog(PlatformUI.MIRTH_FRAME, e.name);
+            dialog.setVisible(true);
+            if (!dialog.isConfirmed()) {
+                return;
+            }
+            newLibrary = dialog.getNewLibrary();
+            targetLibraryId = dialog.getTargetLibraryId();
+        }
+        runInstall(e, "copy", newLibrary, targetLibraryId,
+                "Imported " + e.name + " as a copy.");
+    }
+
+    /**
+     * "Install as Copy" for a channel with a newer snapshot: confirm, then import the
+     * offered snapshot under a fresh id. The installed channel is never touched.
+     */
+    private void installChannelCopy() {
+        final StoreEntry e = selectedEntry();
+        if (e == null || !"channel".equals(e.type) || e.newerSnapshot.isEmpty()) {
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Import \"" + e.name + "\" v" + e.newerSnapshot + " as a new copy?\n"
+                        + "The installed channel is not changed.",
+                "Install as Copy",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            installContentCopy(e);
+        }
+    }
+
+    /**
+     * Runs the servlet install off the EDT. {@code mode} is null for the servlet default
+     * ("install"); {@code contentMessage} is shown for content that needs no restart.
+     */
+    private void runInstall(StoreEntry e, String mode, String newLibrary, String targetLibraryId,
+            String contentMessage) {
         final boolean content = e.isContent();
         new SwingWorker<JsonNode, Void>() {
             @Override
             protected JsonNode doInBackground() throws Exception {
-                return client.install(e.id, e.tag, libChoice[0], libChoice[1]);
+                return client.install(e.id, e.tag, mode, newLibrary, targetLibraryId);
             }
 
             @Override
@@ -349,8 +506,7 @@ class CommunityStorePanel extends AbstractSettingsPanel {
                     JsonNode result = get();
                     boolean restart = result.path("restartRequired").asBoolean(e.restartRequired);
                     if (content && !restart) {
-                        PlatformUI.MIRTH_FRAME.alertInformation(CommunityStorePanel.this,
-                                "Imported " + e.name + ". It's available now.");
+                        PlatformUI.MIRTH_FRAME.alertInformation(CommunityStorePanel.this, contentMessage);
                     } else {
                         PlatformUI.MIRTH_FRAME.alertInformation(CommunityStorePanel.this,
                                 "Installed " + e.name + " " + e.version
@@ -455,6 +611,14 @@ class CommunityStorePanel extends AbstractSettingsPanel {
             }
             if (e.isInstalled()) {
                 sb.append("Installed: ").append(escape(e.installedVersion)).append("<br>");
+            }
+            if (e.modified) {
+                sb.append(e.driftTracked
+                        ? "Modified since install<br>"
+                        : "Local changes unknown (installed before change tracking)<br>");
+            }
+            if (!e.newerSnapshot.isEmpty()) {
+                sb.append("Newer snapshot available: v").append(escape(e.newerSnapshot)).append("<br>");
             }
             if (!e.repo.isEmpty()) {
                 sb.append("Repository: ").append(escape(e.repo)).append("<br>");

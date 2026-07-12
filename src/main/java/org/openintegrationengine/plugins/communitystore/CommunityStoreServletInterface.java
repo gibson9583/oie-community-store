@@ -77,7 +77,7 @@ public interface CommunityStoreServletInterface extends BaseServletInterface {
 
     @POST
     @Path("/_install")
-    @Operation(summary = "Downloads, verifies, and installs a catalog entry through the engine's extension installer.")
+    @Operation(summary = "Downloads, verifies, and installs a catalog entry — extensions through the engine's extension installer, content through its controllers. For content the request may carry a \"mode\": \"install\" (default), \"upgrade\" (in-place, refused for channels), or \"copy\" (fresh engine id, untracked).")
     @MirthOperation(name = "installCommunityStoreExtension", display = "Install extension from Community Store", permission = Permissions.EXTENSIONS_MANAGE)
     public String install(@Param("request") String requestJson) throws ClientException;
 

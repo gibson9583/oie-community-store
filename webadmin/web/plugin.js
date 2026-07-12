@@ -2247,8 +2247,8 @@ function TypeTag({ type }) {
 function Badges({ entry }) {
   return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag cs-tag-update", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-up" }, "\u2191")) : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
 }
-function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, busy }) {
-  return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
+function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLabel, onSecondary, onCancel, busy }) {
+  return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), secondaryLabel ? /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onSecondary, disabled: busy }, secondaryLabel) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
 }
 function useStoreActions(refresh) {
   const [confirm, setConfirm] = React.useState(null);
@@ -2257,28 +2257,39 @@ function useStoreActions(refresh) {
   const [libMode, setLibMode] = React.useState("new");
   const [newLib, setNewLib] = React.useState("");
   const [existingLib, setExistingLib] = React.useState("");
-  const requestInstall = async (entry) => {
-    setConfirm({ entry, mode: "install" });
-    if (entry.type === "code-template" && !entry.installedVersion) {
-      setLibMode("new");
-      setNewLib(entry.name || "Community Store");
-      setExistingLib("");
+  const loadLibraryPicker = async (entry) => {
+    setLibMode("new");
+    setNewLib(entry.name || "Community Store");
+    setExistingLib("");
+    setLibraries([]);
+    try {
+      setLibraries(normalizeLibraries(await apiGet("/codeTemplateLibraries")));
+    } catch (e) {
       setLibraries([]);
-      try {
-        setLibraries(normalizeLibraries(await apiGet("/codeTemplateLibraries")));
-      } catch (e) {
-        setLibraries([]);
-      }
     }
   };
+  const requestInstall = async (entry) => {
+    setConfirm({ entry, mode: "install" });
+    if (entry.type === "code-template" && !entry.installedVersion) await loadLibraryPicker(entry);
+  };
+  const requestCopy = async (entry) => {
+    setConfirm({ entry, mode: "copy" });
+    if (entry.type === "code-template") await loadLibraryPicker(entry);
+  };
+  const requestUpdate = (entry) => {
+    if (entry.type === "code-template" || entry.type === "code-template-library") {
+      setConfirm({ entry, mode: entry.modified ? "modified-choice" : "upgrade" });
+    } else requestInstall(entry);
+  };
   const requestRemove = (entry) => setConfirm({ entry, mode: "remove" });
-  const execute = async () => {
+  const execute = async (modeOverride) => {
     if (!confirm) return;
     const entry = confirm.entry;
+    const mode = modeOverride || confirm.mode;
     const content = isContentType(entry.type);
     setBusy(true);
     try {
-      if (confirm.mode === "remove") {
+      if (mode === "remove") {
         await apiPost(`${BASE}/_removeContent`, { id: entry.id });
         toast(`Removed ${entry.name} from this engine.`, "success");
         setConfirm(null);
@@ -2287,7 +2298,8 @@ function useStoreActions(refresh) {
       }
       {
         const body = { id: entry.id, tag: entry.tag };
-        if (entry.type === "code-template" && !entry.installedVersion) {
+        if (mode === "upgrade" || mode === "copy") body.mode = mode;
+        if (entry.type === "code-template" && (mode === "copy" || mode === "install" && !entry.installedVersion)) {
           if (libMode === "existing") {
             if (!existingLib) {
               toast("Choose a library to add this code template to.", "warn");
@@ -2300,7 +2312,7 @@ function useStoreActions(refresh) {
           }
         }
         await apiPost(`${BASE}/_install`, body);
-        toast(content ? `Imported ${entry.name}. It's available now.` : `Installed ${entry.name} ${entry.version}. Restart the engine to activate it.`, "success");
+        toast(mode === "upgrade" ? entry.updateAvailable ? `Upgraded ${entry.name} to v${entry.version}.` : `Re-imported ${entry.name}.` : mode === "copy" ? `Imported ${entry.name} as a copy.` : content ? `Imported ${entry.name}. It's available now.` : `Installed ${entry.name} ${entry.version}. Restart the engine to activate it.`, "success");
         if (!content) {
           try {
             window.dispatchEvent(new Event("webadmin:restart-pending"));
@@ -2330,20 +2342,52 @@ function useStoreActions(refresh) {
       },
       /* @__PURE__ */ React.createElement("div", null, entry.type === "channel" ? /* @__PURE__ */ React.createElement("p", null, "Deletes the channel ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from this engine \u2014 ", /* @__PURE__ */ React.createElement("strong", null, "including all of its message history"), ". A deployed channel is refused: undeploy it in the Channels view first.") : entry.type === "code-template-library" ? /* @__PURE__ */ React.createElement("p", null, "Deletes the library ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " and ", /* @__PURE__ */ React.createElement("strong", null, "all code templates it currently contains"), " \u2014 including any you added to it after installing.") : /* @__PURE__ */ React.createElement("p", null, "Deletes the code template ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from this engine, including its library membership. The library itself is kept", entry.revoked ? "." : ", and the package stays in Browse if you want to re-import it later."))
     );
-  } else if (confirm) {
+  } else if (confirm && confirm.mode === "modified-choice") {
     const entry = confirm.entry;
-    const content = isContentType(entry.type);
-    const isCodeTemplate = entry.type === "code-template" && !entry.installedVersion;
+    const noun = entry.type === "code-template-library" ? "library" : "template";
+    const untracked = entry.driftTracked === false;
     overlay = /* @__PURE__ */ React.createElement(
       ConfirmOverlay,
       {
-        title: `${content ? entry.updateAvailable ? "Update" : "Import" : "Install"} ${entry.name}?`,
-        confirmLabel: content ? entry.updateAvailable ? `Update to ${entry.version}` : "Import" : `Install ${entry.version}`,
+        title: `${entry.updateAvailable ? "Update" : "Re-import"} ${entry.name}?`,
+        confirmLabel: "Install as new copy",
+        secondaryLabel: "Overwrite",
         busy,
         onCancel: () => setConfirm(null),
-        onConfirm: execute
+        onSecondary: () => execute("upgrade"),
+        onConfirm: () => requestCopy(entry)
       },
-      /* @__PURE__ */ React.createElement("div", null, content ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, "). It takes effect immediately \u2014 no engine restart.") : /* @__PURE__ */ React.createElement("p", null, "This installs ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " release", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.tag), " into the engine's extensions directory after sha256 verification."), isCodeTemplate ? /* @__PURE__ */ React.createElement("div", { className: "mt-3" }, /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mb-1" }, "Add to library:"), /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2 mb-1", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "radio", name: "cs-lib", checked: libMode === "new", onChange: () => setLibMode("new") }), "Create new library:", /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, untracked ? `This ${noun} was installed before change tracking \u2014 the store can't tell whether you've modified it.` : `You've modified this ${noun} since installing it.`), /* @__PURE__ */ React.createElement("p", null, /* @__PURE__ */ React.createElement("strong", null, "Overwrite"), " replaces ", untracked ? "whatever is there" : "your changes", " with version ", entry.version, ".", " ", /* @__PURE__ */ React.createElement("strong", null, "Install as new copy"), " keeps ", untracked ? "what's installed" : "yours", " and imports version ", entry.version, " as a separate ", noun, entry.type === "code-template" ? " (you'll choose a library for it)" : "", "."))
+    );
+  } else if (confirm && confirm.mode === "upgrade") {
+    const entry = confirm.entry;
+    const reimport = !entry.updateAvailable;
+    overlay = /* @__PURE__ */ React.createElement(
+      ConfirmOverlay,
+      {
+        title: reimport ? `Re-import ${entry.name}?` : `Update ${entry.name} to v${entry.version}?`,
+        confirmLabel: reimport ? "Re-import" : `Update to v${entry.version}`,
+        busy,
+        onCancel: () => setConfirm(null),
+        onConfirm: () => execute()
+      },
+      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Replaces the installed ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " in place with version ", entry.version, " from ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, ").", entry.type === "code-template" ? " Its library membership is kept, and it" : " It", " takes effect immediately \u2014 no engine restart."))
+    );
+  } else if (confirm) {
+    const entry = confirm.entry;
+    const copy = confirm.mode === "copy";
+    const content = isContentType(entry.type);
+    const wantsLibrary = entry.type === "code-template" && (copy || !entry.installedVersion);
+    overlay = /* @__PURE__ */ React.createElement(
+      ConfirmOverlay,
+      {
+        title: copy ? `Install ${entry.name} as a copy?` : `${content ? entry.updateAvailable ? "Update" : "Import" : "Install"} ${entry.name}?`,
+        confirmLabel: copy ? "Install as copy" : content ? entry.updateAvailable ? `Update to ${entry.version}` : "Import" : `Install ${entry.version}`,
+        busy,
+        onCancel: () => setConfirm(null),
+        onConfirm: () => execute()
+      },
+      /* @__PURE__ */ React.createElement("div", null, copy ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " version ", entry.version, " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, ") as a new copy with a fresh id", entry.installedVersion ? " \u2014 what you have installed is left untouched" : "", ". The copy is yours: the store does not track or update it.") : content ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, "). It takes effect immediately \u2014 no engine restart.") : /* @__PURE__ */ React.createElement("p", null, "This installs ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " release", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.tag), " into the engine's extensions directory after sha256 verification."), wantsLibrary ? /* @__PURE__ */ React.createElement("div", { className: "mt-3" }, /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mb-1" }, "Add to library:"), /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2 mb-1", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "radio", name: "cs-lib", checked: libMode === "new", onChange: () => setLibMode("new") }), "Create new library:", /* @__PURE__ */ React.createElement(
         "input",
         {
           className: "field",
@@ -2370,7 +2414,7 @@ function useStoreActions(refresh) {
       ))) : null, /* @__PURE__ */ React.createElement("p", { className: "hint mt-2" }, "Community content is published by third parties and is not vetted by the Open Integration Engine project. Installing runs its code in the engine. Install only from publishers you trust."))
     );
   }
-  return { requestInstall, requestRemove, overlay };
+  return { requestInstall, requestUpdate, requestCopy, requestRemove, overlay };
 }
 function DocsPanel({ entry }) {
   const [docs, setDocs] = React.useState(null);
@@ -2405,7 +2449,20 @@ function DocsPanel({ entry }) {
   return /* @__PURE__ */ React.createElement("div", { className: "panel mt-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header flex items-center gap-2" }, "Documentation", docs && docs.found ? /* @__PURE__ */ React.createElement("span", { className: "mono text-text-dim", style: { fontSize: "0.85em" } }, docs.path, " @ ", docs.tag) : null), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("style", null, DOCS_CSS), error ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Could not load documentation: ", error) : null, !error && !docs ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Loading documentation\u2026") : null, docs && !docs.found ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "This publisher provides no store documentation. Publishers can add a store.md (or README.md) to their repository; it renders here, pinned to the release tag.") : null, html2 ? /* @__PURE__ */ React.createElement("div", { className: "cs-docs", dangerouslySetInnerHTML: { __html: html2 } }) : null, docs && docs.truncated ? /* @__PURE__ */ React.createElement("div", { className: "hint mt-2" }, "Documentation was truncated. The full file is available in the repository.") : null));
 }
 function DetailView({ entry, onBack, actions }) {
-  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: onBack }, "\u2190 Back"), /* @__PURE__ */ React.createElement("h2", { className: "m-0" }, entry.name), /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type }), /* @__PURE__ */ React.createElement(Badges, { entry })), entry.revoked ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-err font-semibold" }, entry.revokedReason === "blocked" ? "Blocked by its catalog." : "Removed from its source."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, entry.description))) : null, entry.deprecated ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-accent" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".")) : null, !entry.compatible ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, "No release of this extension is compatible with this engine version", entry.minEngineVersion ? ` (requires engine ${entry.minEngineVersion}${entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : " or later"})` : "", ".")) : null, /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Details"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("p", null, entry.description || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "No description provided.")), /* @__PURE__ */ React.createElement("table", { className: "dt mt-3" }, /* @__PURE__ */ React.createElement("tbody", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Repository"), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { href: entry.repoUrl || `https://github.com/${entry.repo}`, target: "_blank", rel: "noreferrer" }, entry.repo))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Offered version"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.version, " (", entry.tag, ")", entry.offeredIsLatest ? "" : ` \u2014 newest compatible; latest release is ${entry.latestTag}`)), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Engine compatibility"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.minEngineVersion || "unspecified", entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : "+")), entry.installedVersion ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Installed version"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion)) : null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "License"), /* @__PURE__ */ React.createElement("td", null, entry.license || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "unspecified"))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Authors"), /* @__PURE__ */ React.createElement("td", null, (entry.authors || []).join(", ") || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "unspecified"))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Published"), /* @__PURE__ */ React.createElement("td", null, entry.publishedAt || "")), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Source"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.source)), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Restart required"), /* @__PURE__ */ React.createElement("td", null, entry.restartRequired ? "Yes" : "No")))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4" }, entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestInstall(entry) }, isContentType(entry.type) ? entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? "Re-import" : "Import" : entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`) : null, isContentType(entry.type) && entry.installedVersion ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : null, !entry.installable ? /* @__PURE__ */ React.createElement("span", { className: "hint" }, "This type is not installable through the store yet.") : null, entry.documentation ? /* @__PURE__ */ React.createElement("a", { className: "btn", href: entry.documentation, target: "_blank", rel: "noreferrer" }, "Documentation") : null, entry.releaseUrl ? /* @__PURE__ */ React.createElement("a", { className: "btn", href: entry.releaseUrl, target: "_blank", rel: "noreferrer" }, "Release notes") : null))), /* @__PURE__ */ React.createElement(DocsPanel, { entry }));
+  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: onBack }, "\u2190 Back"), /* @__PURE__ */ React.createElement("h2", { className: "m-0" }, entry.name), /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type }), /* @__PURE__ */ React.createElement(Badges, { entry })), entry.revoked ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-err font-semibold" }, entry.revokedReason === "blocked" ? "Blocked by its catalog." : "Removed from its source."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, entry.description))) : null, entry.deprecated ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-accent" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".")) : null, !entry.compatible ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, "No release of this extension is compatible with this engine version", entry.minEngineVersion ? ` (requires engine ${entry.minEngineVersion}${entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : " or later"})` : "", ".")) : null, /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Details"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("p", null, entry.description || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "No description provided.")), /* @__PURE__ */ React.createElement("table", { className: "dt mt-3" }, /* @__PURE__ */ React.createElement("tbody", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Repository"), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { href: entry.repoUrl || `https://github.com/${entry.repo}`, target: "_blank", rel: "noreferrer" }, entry.repo))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Offered version"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.version, " (", entry.tag, ")", entry.offeredIsLatest ? "" : ` \u2014 newest compatible; latest release is ${entry.latestTag}`)), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Engine compatibility"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.minEngineVersion || "unspecified", entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : "+")), entry.installedVersion ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Installed version"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion)) : null, entry.modified ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Local changes"), /* @__PURE__ */ React.createElement("td", null, entry.driftTracked === false ? "Unknown \u2014 installed before change tracking" : "Modified since install")) : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Snapshot"), /* @__PURE__ */ React.createElement("td", { className: "text-accent" }, "Newer snapshot available: v", entry.newerSnapshot)) : null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "License"), /* @__PURE__ */ React.createElement("td", null, entry.license || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "unspecified"))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Authors"), /* @__PURE__ */ React.createElement("td", null, (entry.authors || []).join(", ") || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "unspecified"))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Published"), /* @__PURE__ */ React.createElement("td", null, entry.publishedAt || "")), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Source"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.source)), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Restart required"), /* @__PURE__ */ React.createElement("td", null, entry.restartRequired ? "Yes" : "No")))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4" }, entry.installable && entry.compatible && entry.type === "channel" && entry.installedVersion ? (
+    // Channels are snapshot-only: no in-place update or re-import, ever.
+    // A NEWER snapshot comes in as an untracked copy under a fresh id;
+    // without one, the installed channel offers no action here (matching
+    // the Swing panel exactly).
+    entry.newerSnapshot ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestCopy(entry) }, "Install as copy") : null
+  ) : entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "btn btn-primary",
+      onClick: () => entry.updateAvailable || isContentType(entry.type) && entry.installedVersion ? actions.requestUpdate(entry) : actions.requestInstall(entry)
+    },
+    isContentType(entry.type) ? entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? "Re-import" : "Import" : entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`
+  ) : null, isContentType(entry.type) && entry.installedVersion ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : null, !entry.installable ? /* @__PURE__ */ React.createElement("span", { className: "hint" }, "This type is not installable through the store yet.") : null, entry.documentation ? /* @__PURE__ */ React.createElement("a", { className: "btn", href: entry.documentation, target: "_blank", rel: "noreferrer" }, "Documentation") : null, entry.releaseUrl ? /* @__PURE__ */ React.createElement("a", { className: "btn", href: entry.releaseUrl, target: "_blank", rel: "noreferrer" }, "Release notes") : null))), /* @__PURE__ */ React.createElement(DocsPanel, { entry }));
 }
 function EntryCard({ entry, onSelect }) {
   return /* @__PURE__ */ React.createElement("div", { className: "panel", style: { cursor: "pointer" }, onClick: () => onSelect(entry) }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("strong", null, entry.name), /* @__PURE__ */ React.createElement("span", { className: "mono text-text-dim" }, entry.version), /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mt-1", style: { minHeight: "2.5em" } }, entry.description ? entry.description.length > 140 ? entry.description.slice(0, 140) + "\u2026" : entry.description : ""), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2" }, /* @__PURE__ */ React.createElement("span", { className: "mono text-text-dim text-[12px]" }, entry.repo)), /* @__PURE__ */ React.createElement("div", { className: "mt-2" }, /* @__PURE__ */ React.createElement(Badges, { entry }))));
@@ -2484,7 +2541,7 @@ function InstalledView({ catalog, onSelect, actions }) {
   }
   return /* @__PURE__ */ React.createElement("div", null, revoked.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-err" }, revoked.length === 1 ? "An installed package is" : `${revoked.length} installed packages are`, " no longer offered by ", revoked.length === 1 ? "its" : "their", " source."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Removed or blocked packages keep running on this engine until you act \u2014 review the flagged rows below and uninstall anything you no longer trust from the Extensions page."))) : null, /* @__PURE__ */ React.createElement("table", { className: "dt" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Name"), /* @__PURE__ */ React.createElement("th", null, "Type"), /* @__PURE__ */ React.createElement("th", null, "Installed"), /* @__PURE__ */ React.createElement("th", null, "Available"), /* @__PURE__ */ React.createElement("th", null, "Repository"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, installed.map((entry) => (
     // Revoked rows get an unmissable red treatment: tinted row + badge.
-    /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: entry.revoked ? "cs-revoked" : entry.updateAvailable ? "cs-update" : void 0 }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { onClick: () => onSelect(entry), style: { cursor: "pointer" } }, entry.name), entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", style: { marginLeft: 8 }, title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "text-err" }, "\u2014") : entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, entry.version) : entry.version), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.repo), /* @__PURE__ */ React.createElement("td", { className: "flex gap-1 items-center" }, entry.updateAvailable ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestInstall(entry) }, "Update") : null, isContentType(entry.type) ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : /* @__PURE__ */ React.createElement("span", { className: "hint" }, "Manage in Extensions")))
+    /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: entry.revoked ? "cs-revoked" : entry.updateAvailable ? "cs-update" : void 0 }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { onClick: () => onSelect(entry), style: { cursor: "pointer" } }, entry.name), entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", style: { marginLeft: 8 }, title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "text-err" }, "\u2014") : entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, entry.version) : entry.version), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.repo), /* @__PURE__ */ React.createElement("td", { className: "flex gap-1 items-center" }, entry.updateAvailable ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestUpdate(entry) }, "Update") : null, isContentType(entry.type) ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : /* @__PURE__ */ React.createElement("span", { className: "hint" }, "Manage in Extensions")))
   )))));
 }
 function SettingsView({ catalog, onSaved }) {

@@ -188,8 +188,10 @@ function Badges({ entry }) {
     );
 }
 
-/** Self-contained confirmation overlay (no dependency on host modal internals). */
-function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, busy }) {
+/** Self-contained confirmation overlay (no dependency on host modal internals).
+ *  An optional secondary action renders between Cancel and the primary button
+ *  (used for the three-way modified-template choice). */
+function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLabel, onSecondary, onCancel, busy }) {
     return (
         <div className="cs-overlay">
             <div className="panel" style={{ width: 460, maxWidth: '90vw' }}>
@@ -198,6 +200,9 @@ function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, bu
                     {children}
                     <div className="flex gap-2 mt-4" style={{ justifyContent: 'flex-end' }}>
                         <button className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
+                        {secondaryLabel ? (
+                            <button className="btn" onClick={onSecondary} disabled={busy}>{secondaryLabel}</button>
+                        ) : null}
                         <button className="btn btn-primary" onClick={onConfirm} disabled={busy}>
                             {busy ? 'Working…' : confirmLabel}
                         </button>
@@ -213,7 +218,7 @@ function ConfirmOverlay({ title, children, confirmLabel, onConfirm, onCancel, bu
 /* ------------------------------------------------------------------ */
 
 function useStoreActions(refresh) {
-    const [confirm, setConfirm] = React.useState(null); // { entry, mode }
+    const [confirm, setConfirm] = React.useState(null); // { entry, mode: 'install' | 'upgrade' | 'copy' | 'modified-choice' | 'remove' }
     const [busy, setBusy] = React.useState(false);
     // Code Template install: choose a target library (a standalone template must live in one).
     const [libraries, setLibraries] = React.useState([]);
@@ -221,28 +226,50 @@ function useStoreActions(refresh) {
     const [newLib, setNewLib] = React.useState('');
     const [existingLib, setExistingLib] = React.useState('');
 
+    // Preload the library picker for flows that create a NEW standalone template
+    // (fresh install, install-as-copy). Upgrades keep their existing membership.
+    const loadLibraryPicker = async (entry) => {
+        setLibMode('new');
+        setNewLib(entry.name || 'Community Store');
+        setExistingLib('');
+        setLibraries([]);
+        try { setLibraries(normalizeLibraries(await apiGet('/codeTemplateLibraries'))); }
+        catch (e) { setLibraries([]); } // fall back to create-new only
+    };
+
     const requestInstall = async (entry) => {
         setConfirm({ entry, mode: 'install' });
         // The library picker applies only to a FRESH standalone-template install; an
         // update / re-import keeps its existing library membership (backend enforces).
-        if (entry.type === 'code-template' && !entry.installedVersion) {
-            setLibMode('new');
-            setNewLib(entry.name || 'Community Store');
-            setExistingLib('');
-            setLibraries([]);
-            try { setLibraries(normalizeLibraries(await apiGet('/codeTemplateLibraries'))); }
-            catch (e) { setLibraries([]); } // fall back to create-new only
-        }
+        if (entry.type === 'code-template' && !entry.installedVersion) await loadLibraryPicker(entry);
+    };
+    // Import under a fresh id, leaving anything installed untouched — the only
+    // "newer snapshot" path for channels, and the keep-my-changes path for templates.
+    const requestCopy = async (entry) => {
+        setConfirm({ entry, mode: 'copy' });
+        if (entry.type === 'code-template') await loadLibraryPicker(entry);
+    };
+    // Update / re-import on installed content. Channels never get here (the server always
+    // reports updateAvailable false for them — snapshots only — and the details pane offers
+    // them no re-import). Code templates and libraries are drift-aware: pristine goes
+    // straight to an in-place upgrade; modified asks overwrite/copy/cancel — including
+    // pre-tracking installs (driftTracked=false), which the server reports as modified
+    // because it cannot tell. Everything else keeps today's flow.
+    const requestUpdate = (entry) => {
+        if (entry.type === 'code-template' || entry.type === 'code-template-library') {
+            setConfirm({ entry, mode: entry.modified ? 'modified-choice' : 'upgrade' });
+        } else requestInstall(entry);
     };
     const requestRemove = (entry) => setConfirm({ entry, mode: 'remove' });
 
-    const execute = async () => {
+    const execute = async (modeOverride) => {
         if (!confirm) return;
         const entry = confirm.entry;
+        const mode = modeOverride || confirm.mode;
         const content = isContentType(entry.type);
         setBusy(true);
         try {
-            if (confirm.mode === 'remove') {
+            if (mode === 'remove') {
                 await apiPost(`${BASE}/_removeContent`, { id: entry.id });
                 toast(`Removed ${entry.name} from this engine.`, 'success');
                 setConfirm(null);
@@ -251,7 +278,8 @@ function useStoreActions(refresh) {
             }
             {
                 const body = { id: entry.id, tag: entry.tag };
-                if (entry.type === 'code-template' && !entry.installedVersion) {
+                if (mode === 'upgrade' || mode === 'copy') body.mode = mode;
+                if (entry.type === 'code-template' && (mode === 'copy' || (mode === 'install' && !entry.installedVersion))) {
                     if (libMode === 'existing') {
                         if (!existingLib) { toast('Choose a library to add this code template to.', 'warn'); setBusy(false); return; }
                         body.targetLibraryId = existingLib;
@@ -260,9 +288,11 @@ function useStoreActions(refresh) {
                     }
                 }
                 await apiPost(`${BASE}/_install`, body);
-                toast(content
-                    ? `Imported ${entry.name}. It's available now.`
-                    : `Installed ${entry.name} ${entry.version}. Restart the engine to activate it.`, 'success');
+                toast(mode === 'upgrade' ? (entry.updateAvailable ? `Upgraded ${entry.name} to v${entry.version}.` : `Re-imported ${entry.name}.`)
+                    : mode === 'copy' ? `Imported ${entry.name} as a copy.`
+                        : content
+                            ? `Imported ${entry.name}. It's available now.`
+                            : `Installed ${entry.name} ${entry.version}. Restart the engine to activate it.`, 'success');
                 // Extensions need a restart (shell's staged → Reload UI banner); imported
                 // content takes effect immediately, so no restart prompt.
                 if (!content) {
@@ -311,20 +341,83 @@ function useStoreActions(refresh) {
                 </div>
             </ConfirmOverlay>
         );
-    } else if (confirm) {
+    } else if (confirm && confirm.mode === 'modified-choice') {
+        // Drift-aware template/library update or re-import: an in-place upgrade would
+        // discard whatever the user changed — or MIGHT have changed, for a pre-tracking
+        // install (driftTracked=false) where the store cannot tell. Three-way:
+        // overwrite / copy / cancel.
         const entry = confirm.entry;
-        const content = isContentType(entry.type);
-        const isCodeTemplate = entry.type === 'code-template' && !entry.installedVersion;
+        const noun = entry.type === 'code-template-library' ? 'library' : 'template';
+        const untracked = entry.driftTracked === false;
         overlay = (
             <ConfirmOverlay
-                title={`${content ? (entry.updateAvailable ? 'Update' : 'Import') : 'Install'} ${entry.name}?`}
-                confirmLabel={content ? (entry.updateAvailable ? `Update to ${entry.version}` : 'Import') : `Install ${entry.version}`}
+                title={`${entry.updateAvailable ? 'Update' : 'Re-import'} ${entry.name}?`}
+                confirmLabel="Install as new copy"
+                secondaryLabel="Overwrite"
                 busy={busy}
                 onCancel={() => setConfirm(null)}
-                onConfirm={execute}>
+                onSecondary={() => execute('upgrade')}
+                onConfirm={() => requestCopy(entry)}>
+                <div>
+                    <p>
+                        {untracked
+                            ? `This ${noun} was installed before change tracking — the store can't tell whether you've modified it.`
+                            : `You've modified this ${noun} since installing it.`}
+                    </p>
+                    <p>
+                        <strong>Overwrite</strong> replaces {untracked ? 'whatever is there' : 'your changes'} with
+                        version {entry.version}.{' '}
+                        <strong>Install as new copy</strong> keeps {untracked ? "what's installed" : 'yours'} and
+                        imports version {entry.version} as a separate {noun}
+                        {entry.type === 'code-template' ? " (you'll choose a library for it)" : ''}.
+                    </p>
+                </div>
+            </ConfirmOverlay>
+        );
+    } else if (confirm && confirm.mode === 'upgrade') {
+        const entry = confirm.entry;
+        const reimport = !entry.updateAvailable; // same version offered — re-import, not update
+        overlay = (
+            <ConfirmOverlay
+                title={reimport ? `Re-import ${entry.name}?` : `Update ${entry.name} to v${entry.version}?`}
+                confirmLabel={reimport ? 'Re-import' : `Update to v${entry.version}`}
+                busy={busy}
+                onCancel={() => setConfirm(null)}
+                onConfirm={() => execute()}>
+                <div>
+                    <p>
+                        Replaces the installed {TYPE_LABELS[entry.type] || entry.type} <strong>{entry.name}</strong> in
+                        place with version {entry.version} from <span className="mono">{entry.repo}</span> ({entry.tag}).
+                        {entry.type === 'code-template' ? ' Its library membership is kept, and it' : ' It'} takes
+                        effect immediately — no engine restart.
+                    </p>
+                </div>
+            </ConfirmOverlay>
+        );
+    } else if (confirm) {
+        const entry = confirm.entry;
+        const copy = confirm.mode === 'copy';
+        const content = isContentType(entry.type);
+        const wantsLibrary = entry.type === 'code-template' && (copy || !entry.installedVersion);
+        overlay = (
+            <ConfirmOverlay
+                title={copy ? `Install ${entry.name} as a copy?`
+                    : `${content ? (entry.updateAvailable ? 'Update' : 'Import') : 'Install'} ${entry.name}?`}
+                confirmLabel={copy ? 'Install as copy'
+                    : content ? (entry.updateAvailable ? `Update to ${entry.version}` : 'Import') : `Install ${entry.version}`}
+                busy={busy}
+                onCancel={() => setConfirm(null)}
+                onConfirm={() => execute()}>
                 {(
                     <div>
-                        {content ? (
+                        {copy ? (
+                            <p>
+                                Imports the {TYPE_LABELS[entry.type] || entry.type} <strong>{entry.name}</strong> version {entry.version} from{' '}
+                                <span className="mono">{entry.repo}</span> ({entry.tag}) as a new copy with a fresh id
+                                {entry.installedVersion ? ' — what you have installed is left untouched' : ''}.
+                                The copy is yours: the store does not track or update it.
+                            </p>
+                        ) : content ? (
                             <p>
                                 Imports the {TYPE_LABELS[entry.type] || entry.type} <strong>{entry.name}</strong> from{' '}
                                 <span className="mono">{entry.repo}</span> ({entry.tag}). It takes effect immediately — no engine restart.
@@ -335,7 +428,7 @@ function useStoreActions(refresh) {
                                 <span className="mono">{entry.tag}</span> into the engine's extensions directory after sha256 verification.
                             </p>
                         )}
-                        {isCodeTemplate ? (
+                        {wantsLibrary ? (
                             <div className="mt-3">
                                 <div className="text-text-dim mb-1">Add to library:</div>
                                 <label className="flex items-center gap-2 mb-1" style={{ cursor: 'pointer' }}>
@@ -366,7 +459,7 @@ function useStoreActions(refresh) {
         );
     }
 
-    return { requestInstall, requestRemove, overlay };
+    return { requestInstall, requestUpdate, requestCopy, requestRemove, overlay };
 }
 
 /* ------------------------------------------------------------------ */
@@ -467,6 +560,8 @@ function DetailView({ entry, onBack, actions }) {
                             <tr><td className="text-text-dim">Offered version</td><td className="mono">{entry.version} ({entry.tag}){entry.offeredIsLatest ? '' : ` — newest compatible; latest release is ${entry.latestTag}`}</td></tr>
                             <tr><td className="text-text-dim">Engine compatibility</td><td className="mono">{entry.minEngineVersion || 'unspecified'}{entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : '+'}</td></tr>
                             {entry.installedVersion ? <tr><td className="text-text-dim">Installed version</td><td className="mono">{entry.installedVersion}</td></tr> : null}
+                            {entry.modified ? <tr><td className="text-text-dim">Local changes</td><td>{entry.driftTracked === false ? 'Unknown — installed before change tracking' : 'Modified since install'}</td></tr> : null}
+                            {entry.newerSnapshot ? <tr><td className="text-text-dim">Snapshot</td><td className="text-accent">Newer snapshot available: v{entry.newerSnapshot}</td></tr> : null}
                             <tr><td className="text-text-dim">License</td><td>{entry.license || <span className="text-text-dim">unspecified</span>}</td></tr>
                             <tr><td className="text-text-dim">Authors</td><td>{(entry.authors || []).join(', ') || <span className="text-text-dim">unspecified</span>}</td></tr>
                             <tr><td className="text-text-dim">Published</td><td>{entry.publishedAt || ''}</td></tr>
@@ -475,8 +570,18 @@ function DetailView({ entry, onBack, actions }) {
                         </tbody>
                     </table>
                     <div className="flex gap-2 mt-4">
-                        {entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
-                            <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>
+                        {entry.installable && entry.compatible && entry.type === 'channel' && entry.installedVersion ? (
+                            // Channels are snapshot-only: no in-place update or re-import, ever.
+                            // A NEWER snapshot comes in as an untracked copy under a fresh id;
+                            // without one, the installed channel offers no action here (matching
+                            // the Swing panel exactly).
+                            entry.newerSnapshot ? (
+                                <button className="btn btn-primary" onClick={() => actions.requestCopy(entry)}>Install as copy</button>
+                            ) : null
+                        ) : entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
+                            <button className="btn btn-primary"
+                                onClick={() => (entry.updateAvailable || (isContentType(entry.type) && entry.installedVersion)
+                                    ? actions.requestUpdate(entry) : actions.requestInstall(entry))}>
                                 {isContentType(entry.type)
                                     ? (entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? 'Re-import' : 'Import')
                                     : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
@@ -723,7 +828,7 @@ function InstalledView({ catalog, onSelect, actions }) {
                         <td className="mono">{entry.repo}</td>
                         <td className="flex gap-1 items-center">
                             {entry.updateAvailable ? (
-                                <button className="btn btn-primary" onClick={() => actions.requestInstall(entry)}>Update</button>
+                                <button className="btn btn-primary" onClick={() => actions.requestUpdate(entry)}>Update</button>
                             ) : null}
                             {isContentType(entry.type) ? (
                                 <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>

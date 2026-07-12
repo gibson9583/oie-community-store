@@ -9,7 +9,6 @@ package org.openintegrationengine.plugins.communitystore;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +27,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mirth.connect.model.Channel;
 import com.mirth.connect.model.ServerEvent;
 import com.mirth.connect.model.ServerEventContext;
+import com.mirth.connect.model.codetemplates.BasicCodeTemplateProperties;
 import com.mirth.connect.model.codetemplates.CodeTemplate;
+import com.mirth.connect.model.codetemplates.CodeTemplateContextSet;
 import com.mirth.connect.model.codetemplates.CodeTemplateLibrary;
+import com.mirth.connect.model.codetemplates.CodeTemplateProperties.CodeTemplateType;
 import com.mirth.connect.model.converters.ObjectXMLSerializer;
 import com.mirth.connect.server.controllers.ChannelController;
 import com.mirth.connect.server.controllers.CodeTemplateController;
@@ -89,7 +91,13 @@ public class InstallService {
         }
     }
 
-    private ObjectNode ledgerRecord(ObjectNode entry) {
+    /**
+     * Builds a ledger record for an install (or in-place upgrade — {@code recordInstall}
+     * overwrites by id, which is exactly how an upgrade refreshes version + pristineHash).
+     * {@code pristineHash} is the as-published content hash used for drift detection (see
+     * {@link ContentHash}); null for extensions, which never get one.
+     */
+    private ObjectNode ledgerRecord(ObjectNode entry, String pristineHash) {
         ObjectNode record = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
         record.put("name", entry.path("name").asText(""));
         record.put("type", entry.path("type").asText(""));
@@ -97,6 +105,9 @@ public class InstallService {
         record.put("repo", entry.path("repo").asText(""));
         record.put("repoUrl", entry.path("repoUrl").asText(""));
         record.put("contentId", entry.path("contentId").asText(""));
+        if (pristineHash != null && !pristineHash.isEmpty()) {
+            record.put("pristineHash", pristineHash);
+        }
         record.put("installedAt", System.currentTimeMillis());
         return record;
     }
@@ -142,7 +153,7 @@ public class InstallService {
             String expected = inlineSha256.isEmpty()
                     ? parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8))
                     : inlineSha256;
-            String actual = sha256Hex(artifact);
+            String actual = ContentHash.sha256Hex(artifact);
             if (!actual.equalsIgnoreCase(expected)) {
                 throw new IOException("Checksum verification FAILED for " + assetName + ": expected " + expected + " but computed " + actual + ". The artifact was not installed.");
             }
@@ -156,7 +167,7 @@ public class InstallService {
             }
 
             dispatchEvent(EVENT_INSTALL, userId, Map.of("extension", id, "repo", repo, "tag", tag, "sha256", actual), ServerEvent.Outcome.SUCCESS);
-            updateLedger(id, ledgerRecord(entry));
+            updateLedger(id, ledgerRecord(entry, null));
 
             ObjectNode response = entry.objectNode();
             response.put("installed", true);
@@ -177,11 +188,32 @@ public class InstallService {
      * (no restart) and live in the channel / code-template stores. For a standalone code template
      * the caller supplies a target library on the entry: {@code targetLibraryId} to add to an
      * existing library, or {@code newLibrary} to create one. A checksum is verified when present.
+     *
+     * The optional {@code mode} on the entry selects the operation — the decision logic lives
+     * here so the web and Swing UIs behave identically:
+     * "install" (default) — first install / re-import under the manifest's contentId;
+     * "upgrade" — in-place update of the installed object(s) with the manifest contentId,
+     * library membership untouched, no library param; REFUSED for channels (snapshot-only);
+     * "copy" — import under fresh engine id(s) with the name suffixed " (copy)", leaving the
+     * canonical installed content alone. A copy is untracked user content: no ledger record.
+     *
+     * A code template whose artifact is a raw .js file (rather than engine XML) is wrapped into
+     * a CodeTemplate server-side — see {@link #wrapRawJsTemplate}.
      */
     private ObjectNode installContent(ObjectNode entry, String type, String id, String repo, String tag,
             String assetUrl, String checksumUrl, Integer userId) throws Exception {
+        String mode = entry.path("mode").asText("install");
+        if (!"install".equals(mode) && !"upgrade".equals(mode) && !"copy".equals(mode)) {
+            throw new IOException("Unknown install mode '" + mode + "'. Expected install, upgrade, or copy.");
+        }
+        if ("upgrade".equals(mode) && "channel".equals(type)) {
+            throw new IOException("Channels are snapshot-only and cannot be upgraded in place — the installed channel may carry local changes the store cannot merge. Install the newer snapshot as a copy instead.");
+        }
+        boolean copy = "copy".equals(mode);
+        boolean upgrade = "upgrade".equals(mode);
+
         byte[] artifact = gitHub.downloadAsset(assetUrl);
-        String actual = sha256Hex(artifact);
+        String actual = ContentHash.sha256Hex(artifact);
         String inlineSha256 = entry.path("sha256").asText("");
         String expected = !inlineSha256.isEmpty() ? inlineSha256
                 : (!checksumUrl.isEmpty() ? parseChecksum(new String(gitHub.downloadAsset(checksumUrl), StandardCharsets.UTF_8)) : "");
@@ -191,17 +223,52 @@ public class InstallService {
         String xml = new String(artifact, StandardCharsets.UTF_8);
         ObjectXMLSerializer serializer = ObjectXMLSerializer.getInstance();
         String imported;
+        // The as-published content hash, recorded in the ledger so the catalog can detect local
+        // drift ("modified") later. Stays null for copies — they are untracked by design.
+        String pristineHash = null;
 
         String declaredContentId = entry.path("contentId").asText("");
         if ("channel".equals(type)) {
             Channel channel = serializer.deserialize(xml, Channel.class);
-            requireContentIdMatch(declaredContentId, channel.getId(), "channel");
             ChannelController controller = ControllerFactory.getFactory().createChannelController();
+            if (copy) {
+                // Snapshot import alongside the canonical channel: a fresh engine id and a
+                // distinguishing name, never touching what's installed. The engine enforces
+                // unique channel names, so a second identical copy is rejected there.
+                channel.setId(UUID.randomUUID().toString());
+                channel.setName(channel.getName() + " (copy)");
+            } else {
+                requireContentIdMatch(declaredContentId, channel.getId(), "channel");
+            }
             controller.updateChannel(channel, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true, null);
+            if (!copy) {
+                // Hash what the engine actually STORED, not the artifact bytes: updateChannel
+                // strips <exportData> (its metadata/tags move into server config) and the
+                // resolve-time live hash serializes with THIS engine's version stamp — hashing
+                // the artifact would flag every real-world export as "modified" from the first
+                // resolve. Reading the channel back makes the two hashes match by construction.
+                Channel stored = controller.getChannelById(channel.getId());
+                pristineHash = ContentHash.normalizedXmlHash(serializer.serialize(stored != null ? stored : channel));
+            }
             imported = "channel \"" + channel.getName() + "\"";
         } else if ("code-template-library".equals(type)) {
             CodeTemplateLibrary library = serializer.deserialize(xml, CodeTemplateLibrary.class);
-            requireContentIdMatch(declaredContentId, library.getId(), "code template library");
+            if (copy) {
+                // Fresh ids all the way down — the library AND its member templates — so the
+                // copy can never overwrite the canonical installed templates. The engine
+                // enforces unique library names, hence the suffix.
+                library.setId(UUID.randomUUID().toString());
+                library.setName(library.getName() + " (copy)");
+                if (library.getCodeTemplates() != null) {
+                    for (CodeTemplate template : library.getCodeTemplates()) {
+                        template.setId(UUID.randomUUID().toString());
+                    }
+                }
+            } else {
+                // "upgrade" and "install" are the same in-place merge here: the library object
+                // IS the content, and replacing it by id is what both modes mean.
+                requireContentIdMatch(declaredContentId, library.getId(), "code template library");
+            }
             CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
             // Persist each member template's content, then merge the library into the existing set.
             if (library.getCodeTemplates() != null) {
@@ -214,12 +281,46 @@ public class InstallService {
                 libraries.removeIf(existing -> existing.getId().equals(library.getId()));
                 libraries.add(library);
                 controller.updateLibraries(libraries, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+                if (!copy) {
+                    // As with channels: hash the library as the STORE returns it (member
+                    // templates swapped in from the template store, THIS engine's version
+                    // stamp), not the artifact bytes — the resolve-time drift check hashes
+                    // exactly this shape. Not found degrades to no hash = legacy pristine.
+                    for (CodeTemplateLibrary stored : controller.getLibraries(null, true)) {
+                        if (stored.getId().equals(library.getId())) {
+                            pristineHash = ContentHash.normalizedXmlHash(serializer.serialize(stored));
+                            break;
+                        }
+                    }
+                }
             }
             imported = "code template library \"" + library.getName() + "\"";
+        } else if ("code-template".equals(type) && upgrade) {
+            CodeTemplate template = upgradeCodeTemplate(declaredContentId, entry.path("assetName").asText("").endsWith(".js"), xml, serializer);
+            pristineHash = ContentHash.codeHash(template.getCode());
+            imported = "code template \"" + template.getName() + "\" (upgraded in place)";
         } else if ("code-template".equals(type)) {
             CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
-            CodeTemplate template = serializer.deserialize(xml, CodeTemplate.class);
-            requireContentIdMatch(declaredContentId, template.getId(), "code template");
+            CodeTemplate template;
+            if (entry.path("assetName").asText("").endsWith(".js")) {
+                // Raw JavaScript artifact: identity is constructed from the manifest, so the
+                // XML id-match check does not apply.
+                template = wrapRawJsTemplate(declaredContentId, entry.path("name").asText(id), xml);
+            } else {
+                template = serializer.deserialize(xml, CodeTemplate.class);
+                if (!copy) {
+                    requireContentIdMatch(declaredContentId, template.getId(), "code template");
+                }
+            }
+            if (copy) {
+                // Fresh identity, canonical template untouched. The engine rejects a duplicate
+                // name only within one library, but a copy usually lands next to its original —
+                // the suffix keeps the advertised "install as new copy" flow working there too.
+                template.setId(UUID.randomUUID().toString());
+                template.setName(template.getName() + " (copy)");
+            } else {
+                pristineHash = ContentHash.codeHash(template.getCode());
+            }
 
             // A standalone template must belong to a library — the one the user chose. If it
             // already belongs to one (an update / re-import), leave membership alone: no
@@ -289,7 +390,11 @@ public class InstallService {
         }
 
         dispatchEvent(EVENT_INSTALL, userId, Map.of("extension", id, "repo", repo, "tag", tag, "sha256", actual), ServerEvent.Outcome.SUCCESS);
-        updateLedger(id, ledgerRecord(entry));
+        // A copy is deliberately untracked: it belongs to the user, not to the store's
+        // installed-state, drift, or revocation bookkeeping.
+        if (!copy) {
+            updateLedger(id, ledgerRecord(entry, pristineHash));
+        }
 
         ObjectNode response = entry.objectNode();
         response.put("installed", true);
@@ -465,13 +570,53 @@ public class InstallService {
         throw new IOException("Could not parse a sha256 digest from the checksum sidecar.");
     }
 
-    private static String sha256Hex(byte[] data) throws Exception {
-        byte[] digest = MessageDigest.getInstance("SHA-256").digest(data);
-        StringBuilder hex = new StringBuilder(digest.length * 2);
-        for (byte b : digest) {
-            hex.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+    /**
+     * In-place upgrade of an installed standalone code template: the object with the manifest
+     * contentId is replaced by the artifact's — or, for a raw .js artifact, ONLY its code, so
+     * the user's name / context / type adjustments survive. Library membership is deliberately
+     * untouched: no library prompt applies, and the template must not move or duplicate.
+     */
+    private CodeTemplate upgradeCodeTemplate(String contentId, boolean rawJs, String artifactText,
+            ObjectXMLSerializer serializer) throws Exception {
+        CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
+        CodeTemplate existing = contentId.isEmpty() ? null : controller.getCodeTemplateById(contentId);
+        if (existing == null) {
+            throw new IOException("The code template is not installed on this engine, so there is nothing to upgrade. Install it instead.");
         }
-        return hex.toString();
+        CodeTemplate template;
+        if (rawJs) {
+            if (existing.getProperties() instanceof BasicCodeTemplateProperties) {
+                ((BasicCodeTemplateProperties) existing.getProperties()).setCode(artifactText);
+            } else {
+                existing.setProperties(new BasicCodeTemplateProperties(
+                        existing.getProperties() != null ? existing.getProperties().getType() : CodeTemplateType.FUNCTION, artifactText));
+            }
+            template = existing;
+        } else {
+            template = serializer.deserialize(artifactText, CodeTemplate.class);
+            requireContentIdMatch(contentId, template.getId(), "code template");
+        }
+        controller.updateCodeTemplate(template, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT, true);
+        return template;
+    }
+
+    /**
+     * Wraps a raw .js artifact into a code template. Identity is constructed rather than read
+     * from the artifact: the id is the manifest's contentId and the name is the catalog name.
+     * The file contents become the code verbatim — the engine itself derives the description
+     * from the leading JSDoc block (CodeTemplateUtil) — with the engine's default FUNCTION
+     * type and connector context set, matching CodeTemplate.getDefaultCodeTemplate.
+     */
+    private static CodeTemplate wrapRawJsTemplate(String contentId, String name, String code) throws IOException {
+        if (contentId.isEmpty()) {
+            throw new IOException("A raw .js code template artifact requires a contentId in its manifest — it becomes the template's engine id.");
+        }
+        CodeTemplate template = new CodeTemplate(contentId);
+        template.setName(name);
+        template.setRevision(1);
+        template.setContextSet(CodeTemplateContextSet.getConnectorContextSet());
+        template.setProperties(new BasicCodeTemplateProperties(CodeTemplateType.FUNCTION, code));
+        return template;
     }
 
     private void dispatchEvent(String name, Integer userId, Map<String, String> attributes, ServerEvent.Outcome outcome) {

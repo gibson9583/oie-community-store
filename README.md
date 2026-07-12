@@ -1,6 +1,6 @@
 # OIE Community Store
 
-A community package store for [Open Integration Engine](https://openintegrationengine.org) with no project-hosted infrastructure. It distributes **extensions** (plugins, connectors, data types — built `.zip`s, installed through the engine's extension installer) and **content** (channels, code templates, code template libraries — XML imported through the engine's APIs, no restart). Packages come from two kinds of sources: the curated [community catalog](https://github.com/gibson9583/oie-community-catalog) — a static, PR-reviewed index whose entries carry an artifact URL on **any** https host plus its sha256 — and direct GitHub repository/organization crawls (HACS-style: an `oie.json` manifest per repo, artifacts on GitHub Releases) as the zero-setup publisher on-ramp. Either way the engine downloads, sha256-verifies, and installs everything itself.
+A community package store for [Open Integration Engine](https://openintegrationengine.org) with no project-hosted infrastructure. It distributes **extensions** (plugins, connectors, data types — built `.zip`s, installed through the engine's extension installer) and **content** (channels, code templates, code template libraries — XML exports, or plain `.js` files for code templates, imported through the engine's APIs, no restart). Packages come from two kinds of sources: the curated [community catalog](https://github.com/gibson9583/oie-community-catalog) — a static, PR-reviewed index whose entries carry an artifact URL on **any** https host plus its sha256 — and direct GitHub repository/organization crawls (HACS-style: an `oie.json` manifest per repo, artifacts on GitHub Releases) as the zero-setup publisher on-ramp. Either way the engine downloads, sha256-verifies, and installs everything itself.
 
 ## Screenshots
 
@@ -139,7 +139,7 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 ## Current limitations
 
 * No dependency resolution between plugins.
-* Update detection for extensions relies on `id` matching the extension path and versions being comparable semver; content items report installed/not-installed (by engine id) without version comparison.
+* Update detection for extensions relies on `id` matching the extension path and versions being comparable semver. Installed content is a snapshot the user owns: code templates and libraries offer in-place upgrades (with a warning and an install-as-copy option when the local copy has been modified), while channels never upgrade in place — a newer published version is offered as a separate copy.
 * Content resolved from the GitHub crawl (rather than the catalog) is verified by TLS only unless the manifest supplies a checksum; catalog packages are always sha256-verified.
 * No artifact signing yet (sha256 proves integrity, not publisher identity) — a sigstore-based signing roadmap is planned.
 

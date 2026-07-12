@@ -41,14 +41,14 @@
             }
         },
         "single": {
-            "description": "One extension per repository — the artifact is a .zip asset on the GitHub release, paired with a <asset>.zip.sha256 sidecar.",
+            "description": "One package per repository — for extensions the artifact is a .zip asset on the GitHub release (paired with a <asset>.zip.sha256 sidecar); a code-template may instead publish a raw .js asset that the store wraps into a code template at install.",
             "type": "object",
             "required": ["schemaVersion", "id", "name", "type", "version"],
             "allOf": [{ "$ref": "#/definitions/common" }],
             "properties": {
                 "schemaVersion": { "type": "integer", "const": 1 },
                 "id": {
-                    "description": "Stable extension id. MUST equal the 'path' attribute of the extension's plugin.xml — that is how installed-version tracking works.",
+                    "description": "Stable package id. For extensions it MUST equal the 'path' attribute of the extension's plugin.xml — that is how installed-version tracking works.",
                     "type": "string",
                     "pattern": "^[A-Za-z0-9._-]+$"
                 },
@@ -59,8 +59,13 @@
                     "pattern": "^[0-9]+(\\.[0-9]+)*([.-].+)?$"
                 },
                 "filename": {
-                    "description": "Which release asset to install when the release has more than one .zip. Supports a {version} placeholder.",
+                    "description": "Which release asset to install when the release has more than one. Supports a {version} placeholder (e.g. my-ext-{version}.zip, my-fn-{version}.js).",
                     "type": "string"
+                },
+                "contentId": {
+                    "description": "REQUIRED for content types (channel / code-template / code-template-library): the engine id (UUID) of the artifact, used for installed-detection. Generate once and keep it stable across versions — it is the content's identity.",
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
                 }
             }
         },

@@ -206,6 +206,12 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
             if (body.has("newLibrary")) {
                 entry.put("newLibrary", body.path("newLibrary").asText(""));
             }
+            // Optional content operation mode: install (default), upgrade, or copy. Absent for
+            // older clients — the InstallService defaults it, and all mode validation (e.g.
+            // channels refusing upgrade) lives there so the web and Swing UIs behave identically.
+            if (body.has("mode")) {
+                entry.put("mode", body.path("mode").asText("install"));
+            }
             return plugin().getInstallService().install(entry, getCurrentUserId()).toString();
         } catch (ClientException e) {
             throw e;

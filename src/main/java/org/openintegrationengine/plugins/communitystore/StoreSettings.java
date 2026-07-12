@@ -132,8 +132,9 @@ public class StoreSettings {
     private volatile boolean betaChannel = false;
     private volatile String encryptedToken = "";
     private volatile int syncTtlMinutes = 15;
-    // What THIS store installed (id -> {name,type,version,repo,contentId,installedAt}).
-    // The revocation check compares it against what sources currently offer.
+    // What THIS store installed (id -> {name,type,version,repo,contentId,installedAt,
+    // pristineHash}). The revocation check compares it against what sources currently offer;
+    // pristineHash (content only) is the as-published hash the catalog uses to flag drift.
     private volatile ObjectNode installLedger = MAPPER.createObjectNode();
 
     /** Loads the bundled sources.json from the plugin jar. */

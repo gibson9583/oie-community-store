@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,9 +29,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mirth.connect.model.Channel;
 import com.mirth.connect.model.MetaData;
 import com.mirth.connect.model.codetemplates.CodeTemplate;
 import com.mirth.connect.model.codetemplates.CodeTemplateLibrary;
+import com.mirth.connect.model.converters.ObjectXMLSerializer;
 import com.mirth.connect.server.controllers.ChannelController;
 import com.mirth.connect.server.controllers.CodeTemplateController;
 import com.mirth.connect.server.controllers.ConfigurationController;
@@ -658,7 +661,11 @@ public class CatalogService {
             keywords.add(k.asText());
         }
 
-        String artifact = item.path("artifact").asText("");
+        // {version} in the artifact path resolves to the offered version — the same
+        // substitution the release-asset filename pattern gets — so one manifest line can
+        // cover versioned filenames like "CodeTemplates/my-fn-{version}.js". Substituted
+        // before the ".." traversal check so a hostile version string can't smuggle one in.
+        String artifact = item.path("artifact").asText("").replace("{version}", entry.path("version").asText());
         String assetUrl = "";
         if (!artifact.isEmpty() && !artifact.contains("..")) {
             assetUrl = GitHubClient.RAW_BASE + "/" + fullName + "/" + tag + "/" + encodePath(artifact);
@@ -791,11 +798,13 @@ public class CatalogService {
     private ObjectNode mergeInstalledState(ObjectNode catalog) {
         ObjectNode result = catalog.deepCopy();
         Map<String, String> installed = installedVersionsByPath();
-        Set<String> contentIds = installedContentIds();
+        InstalledContent content = installedContent();
+        Set<String> contentIds = content.ids;
         ObjectNode ledgerForVersions = settings.getInstallLedger();
         for (JsonNode node : result.withArray("entries")) {
             ObjectNode entry = (ObjectNode) node;
-            if (isContentType(entry.path("type").asText())) {
+            String type = entry.path("type").asText();
+            if (isContentType(type)) {
                 // Content is matched by the artifact's engine id (declared as contentId in the
                 // manifest). The engine stores no version for content, but the install ledger
                 // remembers what version THIS store imported — so ledger-tracked content gets
@@ -804,15 +813,39 @@ public class CatalogService {
                 boolean present = !contentId.isEmpty() && contentIds.contains(contentId);
                 JsonNode record = ledgerForVersions.get(entry.path("id").asText());
                 String ledgerVersion = record != null ? record.path("version").asText("") : "";
-                boolean updateAvailable = false;
+                boolean offeredIsNewer = false;
                 if (present && !ledgerVersion.isEmpty()) {
                     SemVer current = SemVer.parse(ledgerVersion);
                     SemVer offered = SemVer.parse(entry.path("version").asText());
-                    updateAvailable = current != null && offered != null && offered.compareTo(current) > 0
+                    offeredIsNewer = current != null && offered != null && offered.compareTo(current) > 0
                             && entry.path("compatible").asBoolean(false);
                 }
                 entry.put("installedVersion", present ? (!ledgerVersion.isEmpty() ? ledgerVersion : entry.path("version").asText()) : "");
-                entry.put("updateAvailable", updateAvailable);
+                if ("channel".equals(type)) {
+                    // Channels are snapshot-only: never offered as an in-place update (the
+                    // installed channel may carry local changes the store cannot merge). A
+                    // newer compatible snapshot is announced separately so both UIs can offer
+                    // "install as copy" instead.
+                    entry.put("updateAvailable", false);
+                    if (offeredIsNewer) {
+                        entry.put("newerSnapshot", entry.path("version").asText());
+                    }
+                } else {
+                    entry.put("updateAvailable", offeredIsNewer);
+                }
+                // Drift: compare the live object against the pristine hash recorded at install
+                // time. No recorded hash — installed before the ledger learned hashes, or
+                // imported outside the store — means the store CANNOT tell whether the object
+                // was changed, so it must protect: modified=true, with driftTracked=false so
+                // both UIs can explain. The ledger self-heals on the next upgrade/overwrite,
+                // which records a fresh pristineHash.
+                if (present) {
+                    String pristineHash = record != null ? record.path("pristineHash").asText("") : "";
+                    boolean driftTracked = !pristineHash.isEmpty();
+                    String liveHash = driftTracked ? liveContentHash(type, contentId, content) : null;
+                    entry.put("modified", !driftTracked || (liveHash != null && !liveHash.equals(pristineHash)));
+                    entry.put("driftTracked", driftTracked);
+                }
                 continue;
             }
             String installedVersion = installed.get(entry.path("id").asText());
@@ -938,13 +971,21 @@ public class CatalogService {
     }
 
     /**
-     * Ids of installed content the store can detect: channel ids, code template library ids, and
-     * code template ids. A content catalog entry is "installed" when its manifest contentId is here.
+     * Installed content the store can detect: channel ids, code template library ids, and code
+     * template ids. A content catalog entry is "installed" when its manifest contentId is here.
+     * The live template and library objects ride along (fetched once per merge, not per entry)
+     * for the drift check.
      */
-    private Set<String> installedContentIds() {
-        Set<String> ids = new HashSet<>();
+    private static final class InstalledContent {
+        final Set<String> ids = new HashSet<>();
+        final Map<String, CodeTemplate> templatesById = new HashMap<>();
+        final Map<String, CodeTemplateLibrary> librariesById = new HashMap<>();
+    }
+
+    private InstalledContent installedContent() {
+        InstalledContent content = new InstalledContent();
         try {
-            ids.addAll(ControllerFactory.getFactory().createChannelController().getChannelIds());
+            content.ids.addAll(ControllerFactory.getFactory().createChannelController().getChannelIds());
         } catch (Exception e) {
             logger.warn("Community Store: could not read installed channel ids: " + e.getMessage());
         }
@@ -953,17 +994,47 @@ public class CatalogService {
             // Library ids come from the library store; template ids come from the TEMPLATE
             // store — NOT from library membership. Membership can dangle: the web admin
             // deletes a template record immediately but commits the membership removal only
-            // on Save All, and a dangling member must not read as still installed.
-            for (CodeTemplateLibrary library : controller.getLibraries(null, false)) {
-                ids.add(library.getId());
+            // on Save All, and a dangling member must not read as still installed. Libraries
+            // are fetched WITH their member templates because the drift hash covers the full
+            // library XML as it was published.
+            for (CodeTemplateLibrary library : controller.getLibraries(null, true)) {
+                content.ids.add(library.getId());
+                content.librariesById.put(library.getId(), library);
             }
             for (CodeTemplate template : controller.getCodeTemplates(null)) {
-                ids.add(template.getId());
+                content.ids.add(template.getId());
+                content.templatesById.put(template.getId(), template);
             }
         } catch (Exception e) {
             logger.warn("Community Store: could not read installed code template ids: " + e.getMessage());
         }
-        return ids;
+        return content;
+    }
+
+    /**
+     * Hash of the LIVE engine object for a present content entry, computed exactly the way the
+     * install path computed the ledger's pristineHash (see {@link ContentHash}): the code string
+     * for a code template, normalized engine XML for a channel or library. Null when the object
+     * cannot be resolved or serialized — the caller degrades that to "not modified".
+     */
+    private String liveContentHash(String type, String contentId, InstalledContent content) {
+        try {
+            if ("code-template".equals(type)) {
+                CodeTemplate template = content.templatesById.get(contentId);
+                return template == null ? null : ContentHash.codeHash(template.getCode());
+            }
+            if ("code-template-library".equals(type)) {
+                CodeTemplateLibrary library = content.librariesById.get(contentId);
+                return library == null ? null : ContentHash.normalizedXmlHash(ObjectXMLSerializer.getInstance().serialize(library));
+            }
+            if ("channel".equals(type)) {
+                Channel channel = ControllerFactory.getFactory().createChannelController().getChannelById(contentId);
+                return channel == null ? null : ContentHash.normalizedXmlHash(ObjectXMLSerializer.getInstance().serialize(channel));
+            }
+        } catch (Exception e) {
+            logger.warn("Community Store: could not hash installed content " + contentId + ": " + e.getMessage());
+        }
+        return null;
     }
 
     private ObjectNode sourceError(String source, String message) {

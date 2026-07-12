@@ -54,14 +54,19 @@ class StoreServletClient {
     }
 
     /**
-     * Install (extensions) or import (content). {@code newLibrary}/{@code targetLibraryId}
-     * apply only to a fresh standalone code-template install and are omitted otherwise.
+     * Install (extensions) or import (content). {@code mode} selects the content operation
+     * ("upgrade" / "copy"); {@code null} or empty leaves the servlet default ("install").
+     * {@code newLibrary}/{@code targetLibraryId} apply only when a standalone code-template
+     * needs library placement (fresh install or copy) and are omitted otherwise.
      */
-    JsonNode install(String id, String tag, String newLibrary, String targetLibraryId) throws Exception {
+    JsonNode install(String id, String tag, String mode, String newLibrary, String targetLibraryId) throws Exception {
         ObjectNode req = MAPPER.createObjectNode();
         req.put("id", id);
         if (tag != null && !tag.isEmpty()) {
             req.put("tag", tag);
+        }
+        if (mode != null && !mode.isEmpty()) {
+            req.put("mode", mode);
         }
         if (newLibrary != null && !newLibrary.isEmpty()) {
             req.put("newLibrary", newLibrary);

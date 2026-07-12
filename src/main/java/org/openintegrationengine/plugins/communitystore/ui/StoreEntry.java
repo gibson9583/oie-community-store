@@ -44,6 +44,8 @@ class StoreEntry {
     String releaseUrl;
     String source;
     String contentId;
+    /** Offered version of a newer channel snapshot, or empty (channels are snapshot-only). */
+    String newerSnapshot;
 
     boolean compatible;
     boolean installable;
@@ -52,6 +54,13 @@ class StoreEntry {
     boolean deprecated;
     boolean revoked;
     boolean offeredIsLatest;
+    /** Installed content drifted from the ledger's pristine hash (never set for plugins). */
+    boolean modified;
+    /**
+     * False when the install predates pristine-hash tracking: the store cannot tell whether
+     * the content was modified, so the server reports {@code modified=true} to protect.
+     */
+    boolean driftTracked;
 
     final List<String> authors = new ArrayList<>();
     final List<String> keywords = new ArrayList<>();
@@ -89,6 +98,7 @@ class StoreEntry {
         e.releaseUrl = str(n, "releaseUrl");
         e.source = str(n, "source");
         e.contentId = str(n, "contentId");
+        e.newerSnapshot = str(n, "newerSnapshot");
 
         e.compatible = n.path("compatible").asBoolean(false);
         e.installable = n.path("installable").asBoolean(false);
@@ -97,6 +107,8 @@ class StoreEntry {
         e.deprecated = n.path("deprecated").asBoolean(false);
         e.revoked = n.path("revoked").asBoolean(false);
         e.offeredIsLatest = n.path("offeredIsLatest").asBoolean(false);
+        e.modified = n.path("modified").asBoolean(false);
+        e.driftTracked = n.path("driftTracked").asBoolean(true);
 
         JsonNode authors = n.path("authors");
         if (authors.isArray()) {
