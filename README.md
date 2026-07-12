@@ -139,7 +139,7 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 ## Current limitations
 
 * No dependency resolution between plugins.
-* Update detection for extensions relies on `id` matching the extension path and versions being comparable semver. Installed content is a snapshot the user owns: code templates and libraries offer in-place upgrades (with a warning and an install-as-copy option when the local copy has been modified), while channels never upgrade in place — a newer published version is offered as a separate copy.
+* Update detection for extensions relies on `id` matching the extension path and versions being comparable semver. Installed content is a snapshot the user owns: code templates and libraries offer in-place upgrades (with a warning and an install-as-copy option when the local copy has been modified), while channels are a snapshot gallery — imported once, installed as a separate copy thereafter, and deleted from the Channels view (the store never deletes a channel).
 * Content resolved from the GitHub crawl (rather than the catalog) is verified by TLS only unless the manifest supplies a checksum; catalog packages are always sha256-verified.
 * No artifact signing yet (sha256 proves integrity, not publisher identity) — a sigstore-based signing roadmap is planned.
 

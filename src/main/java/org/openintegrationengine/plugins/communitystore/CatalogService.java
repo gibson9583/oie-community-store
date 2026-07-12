@@ -29,12 +29,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.mirth.connect.model.Channel;
 import com.mirth.connect.model.MetaData;
 import com.mirth.connect.model.codetemplates.CodeTemplate;
 import com.mirth.connect.model.codetemplates.CodeTemplateLibrary;
 import com.mirth.connect.model.converters.ObjectXMLSerializer;
-import com.mirth.connect.server.controllers.ChannelController;
 import com.mirth.connect.server.controllers.CodeTemplateController;
 import com.mirth.connect.server.controllers.ConfigurationController;
 import com.mirth.connect.server.controllers.ControllerFactory;
@@ -834,12 +832,16 @@ public class CatalogService {
                     entry.put("updateAvailable", offeredIsNewer);
                 }
                 // Drift: compare the live object against the pristine hash recorded at install
-                // time. No recorded hash — installed before the ledger learned hashes, or
-                // imported outside the store — means the store CANNOT tell whether the object
-                // was changed, so it must protect: modified=true, with driftTracked=false so
-                // both UIs can explain. The ledger self-heals on the next upgrade/overwrite,
-                // which records a fresh pristineHash.
-                if (present) {
+                // time — code templates and libraries only. Channels are a snapshot gallery:
+                // presence alone routes every subsequent install to a copy, so the store never
+                // needs to know whether a channel changed — and skipping the live
+                // serialize+hash for channels saves that work on every resolve. For templates
+                // and libraries, no recorded hash — installed before the ledger learned
+                // hashes, or imported outside the store — means the store CANNOT tell whether
+                // the object was changed, so it must protect: modified=true, with
+                // driftTracked=false so both UIs can explain. The ledger self-heals on the
+                // next upgrade/overwrite, which records a fresh pristineHash.
+                if (present && !"channel".equals(type)) {
                     String pristineHash = record != null ? record.path("pristineHash").asText("") : "";
                     boolean driftTracked = !pristineHash.isEmpty();
                     String liveHash = driftTracked ? liveContentHash(type, contentId, content) : null;
@@ -1014,7 +1016,8 @@ public class CatalogService {
     /**
      * Hash of the LIVE engine object for a present content entry, computed exactly the way the
      * install path computed the ledger's pristineHash (see {@link ContentHash}): the code string
-     * for a code template, normalized engine XML for a channel or library. Null when the object
+     * for a code template, normalized engine XML for a library. Channels are never hashed —
+     * they are snapshot-gallery entries with no drift tracking. Null when the object
      * cannot be resolved or serialized — the caller degrades that to "not modified".
      */
     private String liveContentHash(String type, String contentId, InstalledContent content) {
@@ -1026,10 +1029,6 @@ public class CatalogService {
             if ("code-template-library".equals(type)) {
                 CodeTemplateLibrary library = content.librariesById.get(contentId);
                 return library == null ? null : ContentHash.normalizedXmlHash(ObjectXMLSerializer.getInstance().serialize(library));
-            }
-            if ("channel".equals(type)) {
-                Channel channel = ControllerFactory.getFactory().createChannelController().getChannelById(contentId);
-                return channel == null ? null : ContentHash.normalizedXmlHash(ObjectXMLSerializer.getInstance().serialize(channel));
             }
         } catch (Exception e) {
             logger.warn("Community Store: could not hash installed content " + contentId + ": " + e.getMessage());

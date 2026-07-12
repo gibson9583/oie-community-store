@@ -193,12 +193,18 @@ each version carries a `sha256` that the engine verifies before import.
 
 Installing content **imports a copy** into the user's engine. From that moment the
 copy is theirs to edit, and the store never modifies or deletes it without asking.
-When you publish a new version, the two kinds of content behave differently:
-**channels never upgrade in place** — the store shows users that a newer snapshot
-is available and offers to install it as a separate copy alongside whatever they
-have. **Code templates and libraries** offer an in-place upgrade, with modification
+The two kinds of content behave differently:
+
+**Channels are a snapshot gallery.** A user imports your channel once; every install
+after that — including when you publish a newer version, which the store announces as
+"newer snapshot available" — lands as a **separate copy** alongside whatever they
+have. The store never upgrades a channel in place and **never deletes one**: users
+delete channels from the Channels view (undeploying first), like any other channel.
+
+**Code templates and libraries** offer an in-place upgrade, with modification
 protection: a user who has edited their installed copy is warned before anything is
-overwritten and can take the new version as a copy instead.
+overwritten and can take the new version as a copy instead. These can also be
+removed through the store's Installed tab.
 
 ### Code templates as raw JS files
 

@@ -323,11 +323,14 @@ class CommunityStorePanel extends AbstractSettingsPanel {
         // Channels are snapshot-only: the server already forces updateAvailable=false for
         // them, but the gate is explicit so Update can never appear for a channel.
         updateButton.setEnabled(e.updateAvailable && !"channel".equals(e.type));
-        // A newer channel snapshot can only be brought in as an untracked copy.
-        copyButton.setEnabled("channel".equals(e.type) && !e.newerSnapshot.isEmpty());
-        // Only installed content can be removed store-side; extensions go through the
-        // engine's native Extensions page, exactly as the web UI does.
-        removeButton.setEnabled(e.isContent() && e.isInstalled());
+        // Channels are a snapshot gallery: a present channel always installs again as an
+        // untracked copy under a fresh id — no newer-snapshot gate.
+        copyButton.setEnabled("channel".equals(e.type) && e.isInstalled() && e.installable && e.compatible);
+        // Only installed templates and libraries can be removed store-side. Channels are
+        // never removed by the store — delete them in the Channels view (the server
+        // rejects channel removes too) — and extensions go through the engine's native
+        // Extensions page, exactly as the web UI does.
+        removeButton.setEnabled(e.isContent() && e.isInstalled() && !"channel".equals(e.type));
     }
 
     // ---------------------------------------------------------------------
@@ -468,16 +471,16 @@ class CommunityStorePanel extends AbstractSettingsPanel {
     }
 
     /**
-     * "Install as Copy" for a channel with a newer snapshot: confirm, then import the
-     * offered snapshot under a fresh id. The installed channel is never touched.
+     * "Install as Copy" for a present channel: confirm, then import the offered
+     * snapshot under a fresh id. The installed channel is never touched.
      */
     private void installChannelCopy() {
         final StoreEntry e = selectedEntry();
-        if (e == null || !"channel".equals(e.type) || e.newerSnapshot.isEmpty()) {
+        if (e == null || !"channel".equals(e.type) || !e.isInstalled()) {
             return;
         }
         int confirm = JOptionPane.showConfirmDialog(this,
-                "Import \"" + e.name + "\" v" + e.newerSnapshot + " as a new copy?\n"
+                "Import \"" + e.name + "\" v" + e.version + " as a new copy?\n"
                         + "The installed channel is not changed.",
                 "Install as Copy",
                 JOptionPane.YES_NO_OPTION,

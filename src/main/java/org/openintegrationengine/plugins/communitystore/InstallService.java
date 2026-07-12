@@ -474,27 +474,22 @@ public class InstallService {
      * code-template: deletes the template record and drops its library membership;
      * code-template-library: deletes the library AND its current member templates (the same
      * semantics as deleting a library in the Code Templates view);
-     * channel: deletes the channel and its message history — REFUSED while deployed, because
-     * stopping live traffic must be an explicit decision made in the Channels view.
-     * Always clears the install ledger record.
+     * channel: REFUSED — channels are a snapshot gallery the store imports but never
+     * deletes. Deleting a channel (and its message history) is an explicit decision made
+     * in the Channels view, where deployment state is in front of the operator.
+     * Always clears the install ledger record (channels excepted — they are never removed,
+     * and the ledger record keeps powering newer-snapshot detection).
      */
     public ObjectNode removeContent(String id, String type, String contentId, Integer userId) throws Exception {
+        if ("channel".equals(type)) {
+            // Rejected server-side so the two UIs can never diverge on this rule.
+            throw new IOException("Channels are removed from the Channels view (undeploy first), not from the store.");
+        }
         if (contentId == null || contentId.isEmpty()) {
             throw new IOException("No engine id is known for '" + id + "', so the store cannot remove it. Delete it from its native view instead.");
         }
         String removed;
-        if ("channel".equals(type)) {
-            ChannelController channelController = ControllerFactory.getFactory().createChannelController();
-            Channel channel = channelController.getChannelById(contentId);
-            if (channel == null) {
-                throw new IOException("The channel is not on this engine.");
-            }
-            if (channelController.getDeployedChannelById(contentId) != null) {
-                throw new IOException("Channel \"" + channel.getName() + "\" is deployed. Undeploy it in the Channels view first, then remove it.");
-            }
-            channelController.removeChannel(channel, ServerEventContext.SYSTEM_USER_EVENT_CONTEXT);
-            removed = "channel \"" + channel.getName() + "\"";
-        } else if ("code-template-library".equals(type)) {
+        if ("code-template-library".equals(type)) {
             CodeTemplateController controller = ControllerFactory.getFactory().createCodeTemplateController();
             synchronized (LIBRARY_WRITE_LOCK) {
                 List<CodeTemplateLibrary> libraries = new ArrayList<>(controller.getLibraries(null, true));
@@ -541,7 +536,7 @@ public class InstallService {
             }
             removed = "code template" + (removedFrom == null ? "" : " (from library \"" + removedFrom + "\")");
         } else {
-            throw new IOException("Only channels, code templates, and code template libraries can be removed through the store.");
+            throw new IOException("Only code templates and code template libraries can be removed through the store.");
         }
         dispatchEvent(EVENT_REMOVE, userId, Map.of("package", id, "contentId", contentId, "removed", removed), ServerEvent.Outcome.SUCCESS);
         updateLedger(id, null);

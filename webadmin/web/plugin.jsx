@@ -244,7 +244,8 @@ function useStoreActions(refresh) {
         if (entry.type === 'code-template' && !entry.installedVersion) await loadLibraryPicker(entry);
     };
     // Import under a fresh id, leaving anything installed untouched — the only
-    // "newer snapshot" path for channels, and the keep-my-changes path for templates.
+    // path for a present channel (snapshot gallery), and the keep-my-changes
+    // path for templates.
     const requestCopy = async (entry) => {
         setConfirm({ entry, mode: 'copy' });
         if (entry.type === 'code-template') await loadLibraryPicker(entry);
@@ -319,13 +320,7 @@ function useStoreActions(refresh) {
                 onCancel={() => setConfirm(null)}
                 onConfirm={execute}>
                 <div>
-                    {entry.type === 'channel' ? (
-                        <p>
-                            Deletes the channel <strong>{entry.name}</strong> from this engine
-                            — <strong>including all of its message history</strong>. A deployed
-                            channel is refused: undeploy it in the Channels view first.
-                        </p>
-                    ) : entry.type === 'code-template-library' ? (
+                    {entry.type === 'code-template-library' ? (
                         <p>
                             Deletes the library <strong>{entry.name}</strong> and <strong>all code
                             templates it currently contains</strong> — including any you added to
@@ -571,13 +566,11 @@ function DetailView({ entry, onBack, actions }) {
                     </table>
                     <div className="flex gap-2 mt-4">
                         {entry.installable && entry.compatible && entry.type === 'channel' && entry.installedVersion ? (
-                            // Channels are snapshot-only: no in-place update or re-import, ever.
-                            // A NEWER snapshot comes in as an untracked copy under a fresh id;
-                            // without one, the installed channel offers no action here (matching
-                            // the Swing panel exactly).
-                            entry.newerSnapshot ? (
-                                <button className="btn btn-primary" onClick={() => actions.requestCopy(entry)}>Install as copy</button>
-                            ) : null
+                            // Channels are a snapshot gallery: no in-place update, re-import, or
+                            // remove, ever. A present channel always installs again as an
+                            // untracked copy under a fresh id (matching the Swing panel exactly);
+                            // the "newer snapshot" line above says when the copy would be newer.
+                            <button className="btn btn-primary" onClick={() => actions.requestCopy(entry)}>Install as copy</button>
                         ) : entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
                             <button className="btn btn-primary"
                                 onClick={() => (entry.updateAvailable || (isContentType(entry.type) && entry.installedVersion)
@@ -587,7 +580,9 @@ function DetailView({ entry, onBack, actions }) {
                                     : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
                             </button>
                         ) : null}
-                        {isContentType(entry.type) && entry.installedVersion ? (
+                        {isContentType(entry.type) && entry.type !== 'channel' && entry.installedVersion ? (
+                            // No Remove for channels — the store never deletes a channel;
+                            // that happens in the Channels view (server rejects it too).
                             <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
                         ) : null}
                         {!entry.installable ? (
@@ -830,8 +825,10 @@ function InstalledView({ catalog, onSelect, actions }) {
                             {entry.updateAvailable ? (
                                 <button className="btn btn-primary" onClick={() => actions.requestUpdate(entry)}>Update</button>
                             ) : null}
-                            {isContentType(entry.type) ? (
+                            {isContentType(entry.type) && entry.type !== 'channel' ? (
                                 <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
+                            ) : entry.type === 'channel' ? (
+                                <span className="hint">Delete in Channels view</span>
                             ) : (
                                 <span className="hint">Manage in Extensions</span>
                             )}
