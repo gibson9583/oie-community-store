@@ -21,7 +21,8 @@ on-ramp. The engine downloads, sha256-verifies, and installs everything itself.
   clear with them. Channels are a snapshot gallery — import once, install as a copy
   thereafter — and are deleted from the Channels view, never by the store.
 - **sha256 verification** of every artifact before anything touches the engine,
-  gated by the existing manage-extensions permission.
+  gated by the store's own View/Manage Community Store permissions when an
+  authorization plugin (e.g. RBAC) is installed.
 - **Self-aware updates** — the store is listed in the catalog, so a newer release
   shows up as an update like any other package.
 - **Revocation alerts** — packages you installed that are later removed or blocked

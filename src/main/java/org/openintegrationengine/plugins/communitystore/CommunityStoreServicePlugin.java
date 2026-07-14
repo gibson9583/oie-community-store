@@ -63,8 +63,27 @@ public class CommunityStoreServicePlugin implements ServicePlugin {
 
     @Override
     public ExtensionPermission[] getExtensionPermissions() {
-        // Intentionally empty: the store reuses the core "manage extensions" permission.
-        return new ExtensionPermission[0];
+        // Dedicated store permissions, enforced by an authorization plugin (e.g.
+        // RBAC) and surfaced in its role editor under this plugin's header. The
+        // engine's default controller ignores these — without RBAC installed,
+        // everything stays visible and permitted. operationNames must match the
+        // @MirthOperation names in CommunityStoreServletInterface; taskNames gate
+        // the UIs (web nav + buttons) through the extension task-permission merge.
+        return new ExtensionPermission[] {
+                new ExtensionPermission(PLUGIN_POINT,
+                        CommunityStoreServletInterface.PERMISSION_VIEW,
+                        "Browse the Community Store catalog and read publisher documentation.",
+                        new String[] { "getCommunityStoreCatalog", "getCommunityStoreDocs" },
+                        new String[] { "doShowCommunityStore" }),
+                new ExtensionPermission(PLUGIN_POINT,
+                        CommunityStoreServletInterface.PERMISSION_MANAGE,
+                        "Install, update, and remove Community Store content and edit store settings."
+                                + " Content installs (channels, code templates) run through the engine's"
+                                + " controllers, so this permission alone authorizes them.",
+                        new String[] { "getCommunityStoreSettings", "setCommunityStoreSettings",
+                                "removeCommunityStoreContent", "installCommunityStoreExtension" },
+                        new String[] { "doInstallStoreItem", "doRemoveStoreContent", "doEditStoreSettings" })
+        };
     }
 
     @Override

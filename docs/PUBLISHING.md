@@ -39,7 +39,9 @@ Either way the engine downloads, sha256-verifies, and installs everything itself
    import APIs.
 
 The browser never talks to GitHub; the engine backend does all of it, gated by the
-engine's existing **manage-extensions** permission.
+store's own permissions (**View Community Store** for browsing, **Manage Community
+Store** for installs and settings) when an authorization plugin such as RBAC is
+installed — otherwise everything is permitted, as before.
 
 ---
 

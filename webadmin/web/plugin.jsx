@@ -9,6 +9,14 @@
 import { platform } from '@oie/web-shell';
 import { renderDocsHtml } from './markdown.js';
 
+/* RBAC: the store's manage tasks (declared in CommunityStoreServicePlugin's
+   ExtensionPermissions) resolve as bare task names through the RBAC plugin's
+   extension task-permission merge → "Manage Community Store". Without an RBAC
+   plugin the default controller allows everything, so these are always true. */
+const canInstall = () => platform.checkTask('', 'doInstallStoreItem');
+const canRemove = () => platform.checkTask('', 'doRemoveStoreContent');
+const canEditSettings = () => platform.checkTask('', 'doEditStoreSettings');
+
 const React = platform.React;
 const BASE = '/extensions/communitystore';
 
@@ -565,13 +573,13 @@ function DetailView({ entry, onBack, actions }) {
                         </tbody>
                     </table>
                     <div className="flex gap-2 mt-4">
-                        {entry.installable && entry.compatible && entry.type === 'channel' && entry.installedVersion ? (
+                        {canInstall() && entry.installable && entry.compatible && entry.type === 'channel' && entry.installedVersion ? (
                             // Channels are a snapshot gallery: no in-place update, re-import, or
                             // remove, ever. A present channel always installs again as an
                             // untracked copy under a fresh id (matching the Swing panel exactly);
                             // the "newer snapshot" line above says when the copy would be newer.
                             <button className="btn btn-primary" onClick={() => actions.requestCopy(entry)}>Install as copy</button>
-                        ) : entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
+                        ) : canInstall() && entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
                             <button className="btn btn-primary"
                                 onClick={() => (entry.updateAvailable || (isContentType(entry.type) && entry.installedVersion)
                                     ? actions.requestUpdate(entry) : actions.requestInstall(entry))}>
@@ -580,7 +588,7 @@ function DetailView({ entry, onBack, actions }) {
                                     : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
                             </button>
                         ) : null}
-                        {isContentType(entry.type) && entry.type !== 'channel' && entry.installedVersion ? (
+                        {canRemove() && isContentType(entry.type) && entry.type !== 'channel' && entry.installedVersion ? (
                             // No Remove for channels — the store never deletes a channel;
                             // that happens in the Channels view (server rejects it too).
                             <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
@@ -822,11 +830,11 @@ function InstalledView({ catalog, onSelect, actions }) {
                         <td className="mono">{entry.revoked ? <span className="text-err">—</span> : entry.updateAvailable ? <span className="text-accent">{entry.version}</span> : entry.version}</td>
                         <td className="mono">{entry.repo}</td>
                         <td className="flex gap-1 items-center">
-                            {entry.updateAvailable ? (
+                            {canInstall() && entry.updateAvailable ? (
                                 <button className="btn btn-primary" onClick={() => actions.requestUpdate(entry)}>Update</button>
                             ) : null}
                             {isContentType(entry.type) && entry.type !== 'channel' ? (
-                                <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
+                                canRemove() && <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
                             ) : entry.type === 'channel' ? (
                                 <span className="hint">Delete in Channels view</span>
                             ) : (
@@ -1073,7 +1081,7 @@ function CommunityStoreView() {
                         <button className={`tab ${tab === 'installed' ? 'active' : ''}`} onClick={() => setTab('installed')}>
                             Installed{updates > 0 ? ` (${updates})` : ''}
                         </button>
-                        <button className={`tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>Settings</button>
+                        {canEditSettings() && <button className={`tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>Settings</button>}
                         <div className="ml-auto flex items-center gap-2 pr-2">
                             {catalog && catalog.engineVersion ? <span className="text-text-dim text-[12px]">Engine {catalog.engineVersion}</span> : null}
                             <button className="btn btn-sm" onClick={() => refresh(true)} disabled={loading}>{loading ? 'Syncing…' : 'Sync now'}</button>
@@ -1083,7 +1091,7 @@ function CommunityStoreView() {
                         {banners}
                         {tab === 'browse' && catalog ? <BrowseView catalog={catalog} onSelect={setSelected} /> : null}
                         {tab === 'installed' && catalog ? <InstalledView catalog={catalog} onSelect={setSelected} actions={actions} /> : null}
-                        {tab === 'settings' ? <SettingsView catalog={catalog} onSaved={() => refresh(true)} /> : null}
+                        {tab === 'settings' && canEditSettings() ? <SettingsView catalog={catalog} onSaved={() => refresh(true)} /> : null}
                         {loading && !catalog ? <div className="text-text-dim">Loading catalog…</div> : null}
                     </div>
                 </>
@@ -1104,10 +1112,10 @@ export function register() {
         path: '/community-store',
         section: 'Engine',
         order: 80,
-        // Installing/removing plugins is extension management — ride the same
-        // task as the Extensions nav so RBAC hides both together
-        // (doShowExtensions → manageExtensions in the rbac plugin's map).
-        task: 'doShowExtensions',
+        // The store's own task, declared in CommunityStoreServicePlugin's
+        // ExtensionPermissions → "View Community Store". RBAC merges it via
+        // /task-permissions; without RBAC the nav is always visible.
+        task: 'doShowCommunityStore',
     });
     platform.registerView('/community-store', platform.reactView(CommunityStoreView), { title: 'Community Store' });
 }
