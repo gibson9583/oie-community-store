@@ -2673,7 +2673,11 @@ function register() {
     icon: "store",
     path: "/community-store",
     section: "Engine",
-    order: 80
+    order: 80,
+    // Installing/removing plugins is extension management — ride the same
+    // task as the Extensions nav so RBAC hides both together
+    // (doShowExtensions → manageExtensions in the rbac plugin's map).
+    task: "doShowExtensions"
   });
   platform.registerView("/community-store", platform.reactView(CommunityStoreView), { title: "Community Store" });
 }

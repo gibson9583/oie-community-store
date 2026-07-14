@@ -194,7 +194,7 @@ public class InstallService {
      * "install" (default) — first install / re-import under the manifest's contentId;
      * "upgrade" — in-place update of the installed object(s) with the manifest contentId,
      * library membership untouched, no library param; REFUSED for channels (snapshot-only);
-     * "copy" — import under fresh engine id(s) with the name suffixed " (copy)", leaving the
+     * "copy" — import under fresh engine id(s) with the name suffixed " - copy", leaving the
      * canonical installed content alone. A copy is untracked user content: no ledger record.
      *
      * A code template whose artifact is a raw .js file (rather than engine XML) is wrapped into
@@ -236,7 +236,7 @@ public class InstallService {
                 // distinguishing name, never touching what's installed. The engine enforces
                 // unique channel names, so a second identical copy is rejected there.
                 channel.setId(UUID.randomUUID().toString());
-                channel.setName(channel.getName() + " (copy)");
+                channel.setName(channel.getName() + " - copy");
             } else {
                 requireContentIdMatch(declaredContentId, channel.getId(), "channel");
             }
@@ -258,7 +258,7 @@ public class InstallService {
                 // copy can never overwrite the canonical installed templates. The engine
                 // enforces unique library names, hence the suffix.
                 library.setId(UUID.randomUUID().toString());
-                library.setName(library.getName() + " (copy)");
+                library.setName(library.getName() + " - copy");
                 if (library.getCodeTemplates() != null) {
                     for (CodeTemplate template : library.getCodeTemplates()) {
                         template.setId(UUID.randomUUID().toString());
@@ -317,7 +317,7 @@ public class InstallService {
                 // name only within one library, but a copy usually lands next to its original —
                 // the suffix keeps the advertised "install as new copy" flow working there too.
                 template.setId(UUID.randomUUID().toString());
-                template.setName(template.getName() + " (copy)");
+                template.setName(template.getName() + " - copy");
             } else {
                 pristineHash = ContentHash.codeHash(template.getCode());
             }
