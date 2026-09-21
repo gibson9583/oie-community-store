@@ -1,0 +1,7 @@
+{
+  "bundle": "target/communitystore-*.zip",
+  "jars": [
+    "communitystore/communitystore-shared.jar",
+    "communitystore/communitystore-client.jar"
+  ]
+}
