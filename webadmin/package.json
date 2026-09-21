@@ -5,10 +5,13 @@
     "type": "module",
     "scripts": {
         "build": "node build.mjs",
-        "test": "node web/markdown.test.mjs"
+        "test": "node web/markdown.test.mjs && node --test web/actions.test.mjs"
     },
     "devDependencies": {
-        "esbuild": "^0.21.0"
+        "esbuild": "^0.21.0",
+        "jsdom": "26.1.0",
+        "react": "19.2.8",
+        "react-dom": "19.2.8"
     },
     "dependencies": {
         "marked": "14.1.2"

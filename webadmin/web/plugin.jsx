@@ -8,6 +8,7 @@
 
 import { platform } from '@oie/web-shell';
 import { renderDocsHtml } from './markdown.js';
+import { STORE_CSS } from './store-style.js';
 
 /* RBAC: the store's manage tasks (declared in CommunityStoreServicePlugin's
    ExtensionPermissions) resolve as bare task names through the RBAC plugin's
@@ -24,55 +25,6 @@ const BASE = '/extensions/communitystore';
 /* Publisher docs are rendered through the sanitizing pipeline in       */
 /* markdown.js (raw HTML escaped, link/image protocols allowlisted).    */
 /* ------------------------------------------------------------------ */
-
-const STORE_CSS = `
-/* Type/status pills: never wrap their text into tall ovals — tight card rows wrap
-   the whole pill to the next line instead. */
-.cs-store .tag { white-space: nowrap; }
-
-/* Confirmation overlay. Own class, NOT host Tailwind utilities: the host generates
-   utilities from ITS source scan, so a class no host file uses (e.g. inset-0) simply
-   does not exist in app.css — and this plugin's sources are never scanned. */
-.cs-overlay {
-    position: fixed;
-    top: 0; right: 0; bottom: 0; left: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 1000;
-}
-
-/* Update available: a calm green row tint + left bar (the pill carries the
-   detail; the row makes it scannable). Same mechanics as the revoked treatment. */
-.cs-store table.dt tbody tr.cs-update,
-.cs-store table.dt tbody tr.cs-update:hover {
-    background: color-mix(in srgb, var(--ok) 15%, var(--bg1)) !important;
-    box-shadow: inset 4px 0 0 var(--ok);
-}
-
-/* The update pill: green like its row (an accent-blue pill on a green row read
-   as two unrelated signals), bolder text, and a heavier arrow. */
-.cs-store .tag.cs-tag-update {
-    color: var(--ok);
-    border-color: color-mix(in srgb, var(--ok) 55%, transparent);
-    background: color-mix(in srgb, var(--ok) 12%, transparent);
-    font-weight: 700;
-}
-.cs-store .tag.cs-tag-update .cs-up {
-    font-size: 13px;
-    font-weight: 800;
-    line-height: 1;
-}
-
-/* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
-   left bar, in light and dark themes. */
-table.dt tbody tr.cs-revoked,
-table.dt tbody tr.cs-revoked:hover {
-    background: color-mix(in srgb, var(--err) 16%, var(--bg1)) !important;
-    box-shadow: inset 4px 0 0 var(--err);
-}
-`;
 
 const DOCS_CSS = `
 .cs-docs { line-height: 1.55; overflow-wrap: break-word; }
@@ -173,61 +125,57 @@ function setPref(key, value) {
     try { localStorage.setItem('communitystore.' + key, value); } catch (e) { /* private mode */ }
 }
 
-function TypeTag({ type }) {
-    return <span className="tag">{TYPE_LABELS[type] || type}</span>;
-}
-
-function Badges({ entry }) {
-    return (
-        <span className="flex gap-1 items-center flex-wrap">
-            {entry.installedVersion ? (
-                entry.updateAvailable
-                    ? <span className="tag cs-tag-update" title={`Update available: ${entry.version}`}>Installed {entry.installedVersion} <span className="cs-up">↑</span></span>
-                    : <span className="tag">Installed {entry.installedVersion}</span>
-            ) : null}
-            {entry.revoked ? (
-                <span className="tag text-err" title={entry.description}>
-                    {entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}
-                </span>
-            ) : null}
-            {!entry.compatible && !entry.revoked ? <span className="tag">Incompatible</span> : null}
-            {entry.deprecated ? <span className="tag">Deprecated</span> : null}
-        </span>
-    );
-}
-
 /** Self-contained confirmation overlay (no dependency on host modal internals).
  *  An optional secondary action renders between Cancel and the primary button
  *  (used for the three-way modified-template choice). */
-function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLabel, onSecondary, onCancel, busy }) {
-    return (
-        <div className="cs-overlay">
-            <div className="panel" style={{ width: 460, maxWidth: '90vw' }}>
-                <div className="panel-header">{title}</div>
-                <div className="panel-body">
-                    {children}
-                    <div className="flex gap-2 mt-4" style={{ justifyContent: 'flex-end' }}>
-                        <button className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
-                        {secondaryLabel ? (
-                            <button className="btn" onClick={onSecondary} disabled={busy}>{secondaryLabel}</button>
-                        ) : null}
-                        <button className="btn btn-primary" onClick={onConfirm} disabled={busy}>
-                            {busy ? 'Working…' : confirmLabel}
-                        </button>
-                    </div>
-                </div>
+function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLabel, onSecondary, onCancel, busy, loading, error, documentation = false, inactive = false, closeLabel = "Close documentation" }) {
+    const dialog = React.useRef(null);
+    const titleId = React.useId();
+    React.useEffect(() => {
+        const previous = document.activeElement;
+        dialog.current?.focus();
+        return () => { if (previous?.isConnected) previous.focus(); };
+    }, []);
+    const onKeyDown = (event) => {
+        if (event.key === 'Escape' && !busy) { event.stopPropagation(); onCancel(); }
+        if (event.key !== 'Tab') return;
+        const nodes = [...dialog.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary')];
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (!first) { event.preventDefault(); return; }
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog.current)) { event.preventDefault(); first.focus(); }
+    };
+    return <div className="cs-overlay" style={inactive ? {display: 'none'} : undefined}>
+        <div className={`panel cs-dialog ${documentation ? 'cs-documentation-dialog' : ''}`}  role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialog} tabIndex={-1} onKeyDown={onKeyDown}>
+            <div className="panel-header" id={titleId}>{title}{documentation ? <button className="btn btn-sm" onClick={onCancel} aria-label={closeLabel}>Close</button> : null}</div>
+            <div className="panel-body">
+                {children}
+                {loading ? <p role="status">Loading libraries…</p> : null}
+                {error ? <p role="alert" className="cs-notice error">{error}</p> : null}
+                {!documentation ? <div className="cs-dialog-actions">
+                    <button className="btn" onClick={() => onCancel()} disabled={busy}>Cancel</button>
+                    {secondaryLabel ? <button className="btn btn-danger" onClick={() => onSecondary()} disabled={busy || loading}>{secondaryLabel}</button> : null}
+                    <button className="btn btn-primary" onClick={() => onConfirm()} disabled={busy || loading}>
+                        {busy ? 'Working…' : confirmLabel}
+                    </button>
+                </div> : null}
             </div>
         </div>
-    );
+    </div>;
 }
 
 /* ------------------------------------------------------------------ */
 /* Install / uninstall flows                                           */
 /* ------------------------------------------------------------------ */
 
-function useStoreActions(refresh) {
+function useStoreActions(refresh, onComplete) {
     const [confirm, setConfirm] = React.useState(null); // { entry, mode: 'install' | 'upgrade' | 'copy' | 'modified-choice' | 'remove' }
     const [busy, setBusy] = React.useState(false);
+    const inFlight = React.useRef(false);
+    const pickerRequest = React.useRef(0);
+    const [loadingLibraries, setLoadingLibraries] = React.useState(false);
+    const [actionError, setActionError] = React.useState(null);
+    const choose = (value) => { pickerRequest.current++; setLoadingLibraries(false); setActionError(null); setConfirm(value); };
     // Code Template install: choose a target library (a standalone template must live in one).
     const [libraries, setLibraries] = React.useState([]);
     const [libMode, setLibMode] = React.useState('new'); // 'new' | 'existing'
@@ -237,16 +185,22 @@ function useStoreActions(refresh) {
     // Preload the library picker for flows that create a NEW standalone template
     // (fresh install, install-as-copy). Upgrades keep their existing membership.
     const loadLibraryPicker = async (entry) => {
+        const request = ++pickerRequest.current;
+        setLoadingLibraries(true);
         setLibMode('new');
         setNewLib(entry.name || 'Community Store');
         setExistingLib('');
         setLibraries([]);
-        try { setLibraries(normalizeLibraries(await apiGet('/codeTemplateLibraries'))); }
-        catch (e) { setLibraries([]); } // fall back to create-new only
+        try {
+            const result = normalizeLibraries(await apiGet('/codeTemplateLibraries'));
+            if (request === pickerRequest.current) setLibraries(result);
+        } catch (e) {
+            if (request === pickerRequest.current) setActionError('Could not load existing libraries. You can create a new library, or cancel and retry. ' + errText(e));
+        } finally { if (request === pickerRequest.current) setLoadingLibraries(false); }
     };
 
     const requestInstall = async (entry) => {
-        setConfirm({ entry, mode: 'install' });
+        choose({ entry, mode: 'install' });
         // The library picker applies only to a FRESH standalone-template install; an
         // update / re-import keeps its existing library membership (backend enforces).
         if (entry.type === 'code-template' && !entry.installedVersion) await loadLibraryPicker(entry);
@@ -255,7 +209,7 @@ function useStoreActions(refresh) {
     // path for a present channel (snapshot gallery), and the keep-my-changes
     // path for templates.
     const requestCopy = async (entry) => {
-        setConfirm({ entry, mode: 'copy' });
+        choose({ entry, mode: 'copy' });
         if (entry.type === 'code-template') await loadLibraryPicker(entry);
     };
     // Update / re-import on installed content. Channels never get here (the server always
@@ -266,21 +220,25 @@ function useStoreActions(refresh) {
     // because it cannot tell. Everything else keeps today's flow.
     const requestUpdate = (entry) => {
         if (entry.type === 'code-template' || entry.type === 'code-template-library') {
-            setConfirm({ entry, mode: entry.modified ? 'modified-choice' : 'upgrade' });
+            choose({ entry, mode: entry.modified ? 'modified-choice' : 'upgrade' });
         } else requestInstall(entry);
     };
-    const requestRemove = (entry) => setConfirm({ entry, mode: 'remove' });
+    const requestRemove = (entry) => choose({ entry, mode: 'remove' });
 
-    const execute = async (modeOverride) => {
-        if (!confirm) return;
+    const execute = async (modeOverride, overwrite = false) => {
+        if (!confirm || inFlight.current || loadingLibraries) return;
         const entry = confirm.entry;
-        const mode = modeOverride || confirm.mode;
+        const mode = typeof modeOverride === 'string' ? modeOverride : confirm.mode;
+        if (!['install', 'upgrade', 'copy', 'remove'].includes(mode)) return;
         const content = isContentType(entry.type);
+        inFlight.current = true;
+        setActionError(null);
         setBusy(true);
         try {
             if (mode === 'remove') {
                 await apiPost(`${BASE}/_removeContent`, { id: entry.id });
                 toast(`Removed ${entry.name} from this engine.`, 'success');
+                onComplete?.({ entry, mode, restartRequired: false });
                 setConfirm(null);
                 await refresh(false);
                 return;
@@ -288,6 +246,7 @@ function useStoreActions(refresh) {
             {
                 const body = { id: entry.id, tag: entry.tag };
                 if (mode === 'upgrade' || mode === 'copy') body.mode = mode;
+                if (mode === 'upgrade') { body.expectedContentHash = entry.expectedContentHash || ''; body.overwrite = overwrite; }
                 if (entry.type === 'code-template' && (mode === 'copy' || (mode === 'install' && !entry.installedVersion))) {
                     if (libMode === 'existing') {
                         if (!existingLib) { toast('Choose a library to add this code template to.', 'warn'); setBusy(false); return; }
@@ -296,7 +255,8 @@ function useStoreActions(refresh) {
                         body.newLibrary = (newLib || '').trim() || 'Community Store';
                     }
                 }
-                await apiPost(`${BASE}/_install`, body);
+                const result = await apiPost(`${BASE}/_install`, body);
+                onComplete?.({ entry, mode, restartRequired: !!result.restartRequired });
                 toast(mode === 'upgrade' ? (entry.updateAvailable ? `Upgraded ${entry.name} to v${entry.version}.` : `Re-imported ${entry.name}.`)
                     : mode === 'copy' ? `Imported ${entry.name} as a copy.`
                         : content
@@ -311,8 +271,10 @@ function useStoreActions(refresh) {
             setConfirm(null);
             await refresh(false);
         } catch (e) {
+            setActionError(errText(e));
             toast(errText(e), 'error');
         } finally {
+            inFlight.current = false;
             setBusy(false);
         }
     };
@@ -324,9 +286,9 @@ function useStoreActions(refresh) {
             <ConfirmOverlay
                 title={`Remove ${entry.name}?`}
                 confirmLabel="Remove"
-                busy={busy}
-                onCancel={() => setConfirm(null)}
-                onConfirm={execute}>
+                busy={busy} loading={loadingLibraries} error={actionError}
+                onCancel={() => choose(null)}
+                onConfirm={() => execute('remove')}>
                 <div>
                     {entry.type === 'code-template-library' ? (
                         <p>
@@ -357,14 +319,14 @@ function useStoreActions(refresh) {
                 title={`${entry.updateAvailable ? 'Update' : 'Re-import'} ${entry.name}?`}
                 confirmLabel="Install as new copy"
                 secondaryLabel="Overwrite"
-                busy={busy}
-                onCancel={() => setConfirm(null)}
-                onSecondary={() => execute('upgrade')}
+                busy={busy} loading={loadingLibraries} error={actionError}
+                onCancel={() => choose(null)}
+                onSecondary={() => execute('upgrade', true)}
                 onConfirm={() => requestCopy(entry)}>
                 <div>
                     <p>
                         {untracked
-                            ? `This ${noun} was installed before change tracking — the store can't tell whether you've modified it.`
+                            ? `This ${noun} was installed using an older change-tracking format — the store can't tell whether you've modified it.`
                             : `You've modified this ${noun} since installing it.`}
                     </p>
                     <p>
@@ -384,8 +346,8 @@ function useStoreActions(refresh) {
             <ConfirmOverlay
                 title={reimport ? `Re-import ${entry.name}?` : `Update ${entry.name} to v${entry.version}?`}
                 confirmLabel={reimport ? 'Re-import' : `Update to v${entry.version}`}
-                busy={busy}
-                onCancel={() => setConfirm(null)}
+                busy={busy} loading={loadingLibraries} error={actionError}
+                onCancel={() => choose(null)}
                 onConfirm={() => execute()}>
                 <div>
                     <p>
@@ -408,8 +370,8 @@ function useStoreActions(refresh) {
                     : `${content ? (entry.updateAvailable ? 'Update' : 'Import') : 'Install'} ${entry.name}?`}
                 confirmLabel={copy ? 'Install as copy'
                     : content ? (entry.updateAvailable ? `Update to ${entry.version}` : 'Import') : `Install ${entry.version}`}
-                busy={busy}
-                onCancel={() => setConfirm(null)}
+                busy={busy} loading={loadingLibraries} error={actionError}
+                onCancel={() => choose(null)}
                 onConfirm={() => execute()}>
                 {(
                     <div>
@@ -462,7 +424,7 @@ function useStoreActions(refresh) {
         );
     }
 
-    return { requestInstall, requestUpdate, requestCopy, requestRemove, overlay };
+    return { requestInstall, requestUpdate, requestCopy, requestRemove, overlay, busy };
 }
 
 /* ------------------------------------------------------------------ */
@@ -523,330 +485,141 @@ function DocsPanel({ entry }) {
 /* Detail view                                                         */
 /* ------------------------------------------------------------------ */
 
-function DetailView({ entry, onBack, actions }) {
-    return (
-        <div>
-            <div className="flex items-center gap-2 mb-3">
-                <button className="btn btn-sm" onClick={onBack}>← Back</button>
-                <h2 className="m-0">{entry.name}</h2>
-                <TypeTag type={entry.type} />
-                <Badges entry={entry} />
-            </div>
-
-            {entry.revoked ? (
-                <div className="panel mb-3"><div className="panel-body">
-                    <span className="text-err font-semibold">
-                        {entry.revokedReason === 'blocked' ? 'Blocked by its catalog.' : 'Removed from its source.'}
-                    </span>{' '}
-                    <span className="text-text-dim">{entry.description}</span>
-                </div></div>
-            ) : null}
-            {entry.deprecated ? (
-                <div className="panel mb-3"><div className="panel-body text-accent">
-                    Deprecated by the publisher{entry.deprecationMessage ? `: ${entry.deprecationMessage}` : '.'}
-                </div></div>
-            ) : null}
-            {!entry.compatible ? (
-                <div className="panel mb-3"><div className="panel-body">
-                    No release of this extension is compatible with this engine version
-                    {entry.minEngineVersion ? ` (requires engine ${entry.minEngineVersion}${entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : ' or later'})` : ''}.
-                </div></div>
-            ) : null}
-
-            <div className="panel">
-                <div className="panel-header">Details</div>
-                <div className="panel-body">
-                    <p>{entry.description || <span className="text-text-dim">No description provided.</span>}</p>
-                    <table className="dt mt-3">
-                        <tbody>
-                            <tr><td className="text-text-dim">Repository</td><td><a href={entry.repoUrl || `https://github.com/${entry.repo}`} target="_blank" rel="noreferrer">{entry.repo}</a></td></tr>
-                            <tr><td className="text-text-dim">Offered version</td><td className="mono">{entry.version} ({entry.tag}){entry.offeredIsLatest ? '' : ` — newest compatible; latest release is ${entry.latestTag}`}</td></tr>
-                            <tr><td className="text-text-dim">Engine compatibility</td><td className="mono">{entry.minEngineVersion || 'unspecified'}{entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : '+'}</td></tr>
-                            {entry.installedVersion ? <tr><td className="text-text-dim">Installed version</td><td className="mono">{entry.installedVersion}</td></tr> : null}
-                            {entry.modified ? <tr><td className="text-text-dim">Local changes</td><td>{entry.driftTracked === false ? 'Unknown — installed before change tracking' : 'Modified since install'}</td></tr> : null}
-                            {entry.newerSnapshot ? <tr><td className="text-text-dim">Snapshot</td><td className="text-accent">Newer snapshot available: v{entry.newerSnapshot}</td></tr> : null}
-                            <tr><td className="text-text-dim">License</td><td>{entry.license || <span className="text-text-dim">unspecified</span>}</td></tr>
-                            <tr><td className="text-text-dim">Authors</td><td>{(entry.authors || []).join(', ') || <span className="text-text-dim">unspecified</span>}</td></tr>
-                            <tr><td className="text-text-dim">Published</td><td>{entry.publishedAt || ''}</td></tr>
-                            <tr><td className="text-text-dim">Source</td><td className="mono">{entry.source}</td></tr>
-                            <tr><td className="text-text-dim">Restart required</td><td>{entry.restartRequired ? 'Yes' : 'No'}</td></tr>
-                        </tbody>
-                    </table>
-                    <div className="flex gap-2 mt-4">
-                        {canInstall() && entry.installable && entry.compatible && entry.type === 'channel' && entry.installedVersion ? (
-                            // Channels are a snapshot gallery: no in-place update, re-import, or
-                            // remove, ever. A present channel always installs again as an
-                            // untracked copy under a fresh id (matching the Swing panel exactly);
-                            // the "newer snapshot" line above says when the copy would be newer.
-                            <button className="btn btn-primary" onClick={() => actions.requestCopy(entry)}>Install as copy</button>
-                        ) : canInstall() && entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? (
-                            <button className="btn btn-primary"
-                                onClick={() => (entry.updateAvailable || (isContentType(entry.type) && entry.installedVersion)
-                                    ? actions.requestUpdate(entry) : actions.requestInstall(entry))}>
-                                {isContentType(entry.type)
-                                    ? (entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? 'Re-import' : 'Import')
-                                    : (entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`)}
-                            </button>
-                        ) : null}
-                        {canRemove() && isContentType(entry.type) && entry.type !== 'channel' && entry.installedVersion ? (
-                            // No Remove for channels — the store never deletes a channel;
-                            // that happens in the Channels view (server rejects it too).
-                            <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
-                        ) : null}
-                        {!entry.installable ? (
-                            <span className="hint">This type is not installable through the store yet.</span>
-                        ) : null}
-                        {entry.documentation ? (
-                            <a className="btn" href={entry.documentation} target="_blank" rel="noreferrer">Documentation</a>
-                        ) : null}
-                        {entry.releaseUrl ? (
-                            <a className="btn" href={entry.releaseUrl} target="_blank" rel="noreferrer">Release notes</a>
-                        ) : null}
-                    </div>
-                </div>
-            </div>
-
-            <DocsPanel entry={entry} />
+// Match the host navigation glyphs and stroke weight (core/icons.ts).
+const TYPE_ICONS = {
+    'connector': 'M8 2v6M16 2v6M5 8h14v4a7 7 0 0 1-14 0V8zM12 19v3',
+    'plugin': 'M8 2v6M16 2v6M5 8h14v4a7 7 0 0 1-14 0V8zM12 19v3',
+    'datatype': 'M8 2v6M16 2v6M5 8h14v4a7 7 0 0 1-14 0V8zM12 19v3',
+    'channel': 'M2 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M16 5a3 3 0 1 0 6 0a3 3 0 1 0-6 0M16 19a3 3 0 1 0 6 0a3 3 0 1 0-6 0M7.7 10.7l8.6-4.4M7.7 13.3l8.6 4.4',
+    'code-template': 'M8 7l-5 5 5 5M16 7l5 5-5 5M13 4l-2 16',
+    'code-template-library': 'M8 7l-5 5 5 5M16 7l5 5-5 5M13 4l-2 16',
+};
+function PackageIcon({ type }) {
+    return <span className="cs-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={TYPE_ICONS[type] || TYPE_ICONS.plugin} /></svg></span>;
+}
+function PackageStatus({ entry }) {
+    if (entry.revoked) return <span className="cs-pill error">{entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}</span>;
+    if (entry.stagedVersion) return <span className="cs-pill warn">Restart pending</span>;
+    if (entry.modified) return <span className="cs-pill warn">{entry.driftTracked === false ? 'Changes unknown' : 'Locally modified'}</span>;
+    if (entry.updateAvailable) return <span className="cs-pill update">Update available</span>;
+    if (!entry.compatible) return <span className="cs-pill warn">Incompatible</span>;
+    if (entry.deprecated) return <span className="cs-pill warn">Deprecated</span>;
+    if (entry.installedVersion) return <span className="cs-pill ok">Installed</span>;
+    return <span className="cs-pill">Available to {isContentType(entry.type) ? 'import' : 'install'}</span>;
+}
+function safeExternalUrl(value) {
+    try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; }
+    catch { return null; }
+}
+function ExternalLink({ href, children }) {
+    const safe = safeExternalUrl(href);
+    return safe ? <a href={safe} target="_blank" rel="noopener noreferrer">{children}</a> : null;
+}
+function DetailView({ entry, actions }) {
+    const [docsOpen, setDocsOpen] = React.useState(true);
+    React.useEffect(() => setDocsOpen(true), [entry?.id]);
+    if (!entry) return <aside className="cs-detail"><h2>Package details</h2><p className="cs-detail-description">Select a package to review its compatibility, source, and installation options.</p></aside>;
+    const content = isContentType(entry.type);
+    const channelCopy = entry.type === 'channel' && entry.installedVersion;
+    const update = entry.updateAvailable || (content && entry.installedVersion && !channelCopy);
+    const actionable = canInstall() && entry.installable && entry.compatible && !entry.revoked && !entry.stagedVersion
+        && (content || !entry.installedVersion || entry.updateAvailable);
+    const label = channelCopy ? 'Import as copy' : update ? entry.updateAvailable ? `Review update to ${entry.version}` : 'Review re-import'
+        : content ? 'Review import' : 'Review installation';
+    return <aside className="cs-detail" aria-label="Selected package">
+        <PackageIcon type={entry.type} />
+        <h2>{entry.name}</h2>
+        <div className="cs-meta">{TYPE_LABELS[entry.type] || entry.type}{entry.authors?.length ? ` · by ${entry.authors.join(', ')}` : ''}</div>
+        <p className="cs-detail-description">{entry.description || 'No description provided.'}</p>
+        <PackageStatus entry={entry} />
+        <dl className="cs-facts">
+            <div className="cs-fact"><dt>Offered version</dt><dd>{entry.revoked ? 'Unavailable' : entry.version}</dd></div>
+            <div className="cs-fact"><dt>Installed version</dt><dd>{entry.installedVersion || 'Not installed'}</dd></div>
+            {entry.stagedVersion ? <div className="cs-fact"><dt>Staged version</dt><dd>{entry.stagedVersion}</dd></div> : null}
+            <div className="cs-fact"><dt>Engine compatibility</dt><dd>{entry.minEngineVersion || 'Unspecified'}{entry.maxEngineVersion ? ` – ${entry.maxEngineVersion}` : entry.minEngineVersion ? '+' : ''}</dd></div>
+        </dl>
+        {entry.revoked ? <p className="cs-notice error">This package is no longer offered by its source. Review whether you still trust it.</p>
+            : entry.stagedVersion ? <p className="cs-notice warn">Version {entry.stagedVersion} is staged. Restart the engine to activate it.</p>
+            : !entry.compatible ? <p className="cs-notice warn">No compatible version is available for this engine.</p>
+            : <p className="cs-notice">{content ? 'Imported content is available immediately. No restart needed.' : 'Engine restart required after installation.'}</p>}
+        {entry.modified ? <p className="cs-notice warn">{entry.driftTracked === false ? 'Local changes are unknown with the previous tracking format.' : 'Local edits detected.'} Review before replacing this content. You can keep your changes by importing a copy.</p> : null}
+        {entry.deprecated ? <p className="cs-notice warn">Deprecated by the publisher{entry.deprecationMessage ? `: ${entry.deprecationMessage}` : '.'}</p> : null}
+        {entry.newerSnapshot ? <p className="cs-notice">Newer snapshot available: {entry.newerSnapshot}. Import as a copy to keep the installed channel.</p> : null}
+        {actionable ? <button className="btn btn-primary cs-primary-action" disabled={actions.busy}
+            onClick={() => channelCopy ? actions.requestCopy(entry) : update ? actions.requestUpdate(entry) : actions.requestInstall(entry)}>{label}</button> : null}
+        <p className="cs-footnote">Community published. A checksum verifies artifact integrity, not publisher identity.</p>
+        <details className="cs-package-info"><summary>Package information</summary><dl className="cs-facts">
+            <div className="cs-fact"><dt>License</dt><dd>{entry.license || 'Unspecified'}</dd></div>
+            <div className="cs-fact"><dt>Repository</dt><dd><ExternalLink href={entry.repoUrl || `https://github.com/${entry.repo}`}>{entry.repo || 'Repository'}</ExternalLink></dd></div>
+            <div className="cs-fact"><dt>Source</dt><dd>{entry.source}</dd></div>
+            <div className="cs-fact"><dt>Artifact integrity</dt><dd>{entry.sha256 || entry.checksumUrl ? 'SHA-256 on install' : 'No published checksum'}</dd></div>
+            {entry.publishedAt ? <div className="cs-fact"><dt>Published</dt><dd>{new Date(entry.publishedAt).toLocaleDateString()}</dd></div> : null}
+            {!entry.offeredIsLatest && entry.latestTag ? <div className="cs-fact"><dt>Latest release</dt><dd>{entry.latestTag} (offering the compatible version)</dd></div> : null}
+        </dl></details>
+        <div className="cs-detail-links">
+            <ExternalLink href={entry.documentation}>Documentation ↗</ExternalLink>
+            <ExternalLink href={entry.releaseUrl}>Release notes ↗</ExternalLink>
         </div>
-    );
+        {!entry.revoked ? <>
+            <button className="btn cs-docs-toggle" aria-expanded={docsOpen} onClick={() => setDocsOpen(!docsOpen)}>{docsOpen ? 'Hide publisher documentation' : 'Read publisher documentation'}</button>
+            {docsOpen ? <DocsPanel entry={entry} /> : null}
+        </> : null}
+        {entry.installedVersion ? <div className="cs-facts">
+            {content && entry.type !== 'channel' && canRemove() ? <button className="btn btn-danger" disabled={actions.busy} onClick={() => actions.requestRemove(entry)}>Remove from engine…</button>
+                : <p className="cs-footnote">{entry.type === 'channel' ? 'Manage or delete this channel in Channels.' : 'Manage or uninstall this package in Extensions.'}</p>}
+        </div> : null}
+    </aside>;
 }
-
-/* ------------------------------------------------------------------ */
-/* Browse view                                                         */
-/* ------------------------------------------------------------------ */
-
-function EntryCard({ entry, onSelect }) {
-    return (
-        <div className="panel" style={{ cursor: 'pointer' }} onClick={() => onSelect(entry)}>
-            <div className="panel-body">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <strong>{entry.name}</strong>
-                    <span className="mono text-text-dim">{entry.version}</span>
-                    <TypeTag type={entry.type} />
-                </div>
-                <div className="text-text-dim mt-1" style={{ minHeight: '2.5em' }}>
-                    {entry.description ? (entry.description.length > 140 ? entry.description.slice(0, 140) + '…' : entry.description) : ''}
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                    <span className="mono text-text-dim text-[12px]">{entry.repo}</span>
-                </div>
-                <div className="mt-2"><Badges entry={entry} /></div>
-            </div>
-        </div>
-    );
+function statusGroup(e) {
+    if (e.stagedVersion) return 'Restart pending';
+    if (e.revoked) return 'Needs attention';
+    if (e.updateAvailable) return 'Updates available';
+    return e.installedVersion ? 'Installed' : 'Available';
 }
-
-function CardsGrid({ entries, onSelect }) {
-    return (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-            {entries.map((entry) => <EntryCard key={entry.id} entry={entry} onSelect={onSelect} />)}
-        </div>
-    );
-}
-
-function EntryRow({ entry, onSelect }) {
-    return (
-        <tr style={{ cursor: 'pointer' }} className={entry.updateAvailable ? 'cs-update' : undefined}
-            onClick={() => onSelect(entry)}>
-            <td><a className="text-accent">{entry.name}</a></td>
-            <td><TypeTag type={entry.type} /></td>
-            <td className="mono">{entry.version}</td>
-            <td className="mono text-text-dim">{entry.repo}</td>
-            <td><Badges entry={entry} /></td>
-        </tr>
-    );
-}
-
-// Shared column widths so every table (grouped or not) lines up identically.
-const TABLE_COLS = (
-    <colgroup>
-        <col /><col style={{ width: 170 }} /><col style={{ width: 110 }} /><col style={{ width: 320 }} /><col style={{ width: 170 }} />
-    </colgroup>
-);
-const TABLE_HEAD = <thead><tr><th>Name</th><th>Type</th><th>Version</th><th>Repository</th><th>Status</th></tr></thead>;
-
-function EntryTable({ entries, onSelect }) {
-    return (
-        <table className="dt">
-            {TABLE_COLS}
-            {TABLE_HEAD}
-            <tbody>
-                {entries.map((entry) => <EntryRow key={entry.id} entry={entry} onSelect={onSelect} />)}
-            </tbody>
-        </table>
-    );
-}
-
-// One table with a header row per type — keeps all columns aligned across groups.
-function GroupedTable({ groups, onSelect }) {
-    return (
-        <table className="dt">
-            {TABLE_COLS}
-            {TABLE_HEAD}
-            {groups.map(({ type, entries }) => (
-                <tbody key={type}>
-                    <tr className="group-row">
-                        <td colSpan={5}>
-                            <span className="font-semibold">{TYPE_LABELS[type] || type}</span>{' '}
-                            <span className="text-text-faint text-[12px]">{entries.length}</span>
-                        </td>
-                    </tr>
-                    {entries.map((entry) => <EntryRow key={entry.id} entry={entry} onSelect={onSelect} />)}
-                </tbody>
-            ))}
-        </table>
-    );
-}
-
-function BrowseView({ catalog, onSelect }) {
+const STATUS_ORDER = ['Restart pending', 'Needs attention', 'Updates available', 'Installed', 'Available'];
+function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
     const [search, setSearch] = React.useState('');
     const [typeFilter, setTypeFilter] = React.useState('');
-    const [viewMode, setViewMode] = React.useState(() => getPref('view', 'cards'));
-    const [groupByType, setGroupByType] = React.useState(() => getPref('group', '0') === '1');
-
-    const setView = (v) => { setViewMode(v); setPref('view', v); };
-    const setGroup = (g) => { setGroupByType(g); setPref('group', g ? '1' : '0'); };
-
-    // Web store client: hide entries whose offered version ships a UI that isn't web
-    // (swing-only). Content (ui absent) and server-only / ui-less (ui []) are kept.
-    // Everything below (entries, type dropdown, "N of M" count) derives from this so
-    // hidden swing-only entries never leak into any downstream count.
-    const visible = (catalog.entries || []).filter(showsInWebUi);
-
-    const entries = visible.filter((entry) => {
-        if (entry.revoked) return false;   // surfaced on the Installed tab, not browseable
-        if (typeFilter && entry.type !== typeFilter) return false;
-        if (!search) return true;
-        const haystack = `${entry.name} ${entry.description} ${entry.repo} ${(entry.keywords || []).join(' ')}`.toLowerCase();
-        return haystack.includes(search.toLowerCase());
-    });
-
-    const types = [...new Set(visible.map((e) => e.type))]
-        .sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b));
-
-    const render = (list) => viewMode === 'table'
-        ? <EntryTable entries={list} onSelect={onSelect} />
-        : <CardsGrid entries={list} onSelect={onSelect} />;
-
-    return (
-        <div>
-            <div className="flex gap-2 items-center mb-3 flex-wrap">
-                <input className="field" style={{ maxWidth: 320 }} placeholder="Search name, description, keywords…"
-                    value={search} onChange={(e) => setSearch(e.target.value)} />
-                <select className="field" style={{ maxWidth: 200 }} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                    <option value="">All types</option>
-                    {types.map((t) => <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>)}
-                </select>
-                <span className="text-text-dim">{entries.length} of {visible.length} item(s)</span>
-                <div className="ml-auto flex items-center gap-3">
-                    <label className="flex items-center gap-1.5 text-text-dim" style={{ cursor: 'pointer' }}>
-                        <input type="checkbox" checked={groupByType} onChange={(e) => setGroup(e.target.checked)} />
-                        Group by type
-                    </label>
-                    <div className="flex">
-                        <button className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : ''}`} onClick={() => setView('cards')}>Cards</button>
-                        <button className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : ''}`} onClick={() => setView('table')}>Table</button>
-                    </div>
-                </div>
-            </div>
-
-            {entries.length === 0 ? (
-                <div className="panel"><div className="panel-body text-text-dim">
-                    No items match. Sources may still be syncing, or none are configured; check Settings.
-                </div></div>
-            ) : groupByType ? (
-                (() => {
-                    const groups = types
-                        .filter((t) => entries.some((e) => e.type === t))
-                        .map((t) => ({ type: t, entries: entries.filter((e) => e.type === t) }));
-                    // Table mode: one shared table with per-type header rows, so columns align.
-                    if (viewMode === 'table') {
-                        return <GroupedTable groups={groups} onSelect={onSelect} />;
-                    }
-                    return (
-                        <div className="flex flex-col gap-4">
-                            {groups.map(({ type, entries: group }) => (
-                                <div key={type}>
-                                    <div className="flex items-center gap-2 py-1.5 border-b border-line mb-2">
-                                        <span className="font-semibold">{TYPE_LABELS[type] || type}</span>
-                                        <span className="text-text-faint text-[12px]">{group.length}</span>
-                                    </div>
-                                    <CardsGrid entries={group} onSelect={onSelect} />
-                                </div>
-                            ))}
-                        </div>
-                    );
-                })()
-            ) : render(entries)}
-        </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/* Installed view                                                      */
-/* ------------------------------------------------------------------ */
-
-function InstalledView({ catalog, onSelect, actions }) {
-    const installed = (catalog.entries || []).filter((e) => e.installedVersion && showsInWebUi(e));
-    const revoked = installed.filter((e) => e.revoked);
-    if (installed.length === 0) {
-        return <div className="panel"><div className="panel-body text-text-dim">
-            No store-tracked extensions are installed. Extensions installed manually appear here once
-            their repository is listed in a configured source and the ids match.
-        </div></div>;
+    const [groupBy, setGroupBy] = React.useState(() => getPref('groupBy', 'status'));
+    const [sortBy, setSortBy] = React.useState(() => getPref('sortBy', 'name'));
+    const [collapsed, setCollapsed] = React.useState({});
+    const visible = (catalog.entries || []).filter(e => e.installedVersion || e.stagedVersion || showsInWebUi(e));
+    const entries = visible.filter(e => (tab === 'installed' ? e.installedVersion || e.stagedVersion
+        : tab === 'updates' ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked)
+        && (!typeFilter || e.type === typeFilter)
+        && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
+        .sort((a,b) => (sortBy === 'type' ? typeRank(a.type) - typeRank(b.type) : sortBy === 'status' ? STATUS_ORDER.indexOf(statusGroup(a)) - STATUS_ORDER.indexOf(statusGroup(b)) : 0) || a.name.localeCompare(b.name));
+    const types = [...new Set(visible.map(e => e.type))].sort((a,b) => typeRank(a) - typeRank(b));
+    const groups = new Map();
+    for (const entry of entries) {
+        const key = groupBy === 'type' ? entry.type : groupBy === 'status' ? statusGroup(entry) : 'All packages';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(entry);
     }
-    return (
-        <div>
-            {revoked.length > 0 ? (
-                <div className="panel mb-3"><div className="panel-body">
-                    <span className="text-err">
-                        {revoked.length === 1 ? 'An installed package is' : `${revoked.length} installed packages are`} no
-                        longer offered by {revoked.length === 1 ? 'its' : 'their'} source.
-                    </span>{' '}
-                    <span className="text-text-dim">
-                        Removed or blocked packages keep running on this engine until you act — review the
-                        flagged rows below and uninstall anything you no longer trust from the Extensions page.
-                    </span>
-                </div></div>
-            ) : null}
-        <table className="dt">
-            <thead>
-                <tr><th>Name</th><th>Type</th><th>Installed</th><th>Available</th><th>Repository</th><th></th></tr>
-            </thead>
-            <tbody>
-                {installed.map((entry) => (
-                    // Revoked rows get an unmissable red treatment: tinted row + badge.
-                    <tr key={entry.id} className={entry.revoked ? 'cs-revoked' : entry.updateAvailable ? 'cs-update' : undefined}>
-                        <td>
-                            <a onClick={() => onSelect(entry)} style={{ cursor: 'pointer' }}>{entry.name}</a>
-                            {entry.revoked ? (
-                                <span className="tag text-err" style={{ marginLeft: 8 }} title={entry.description}>
-                                    {entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}
-                                </span>
-                            ) : null}
-                        </td>
-                        <td><TypeTag type={entry.type} /></td>
-                        <td className="mono">{entry.installedVersion}</td>
-                        <td className="mono">{entry.revoked ? <span className="text-err">—</span> : entry.updateAvailable ? <span className="text-accent">{entry.version}</span> : entry.version}</td>
-                        <td className="mono">{entry.repo}</td>
-                        <td className="flex gap-1 items-center">
-                            {canInstall() && entry.updateAvailable ? (
-                                <button className="btn btn-primary" onClick={() => actions.requestUpdate(entry)}>Update</button>
-                            ) : null}
-                            {isContentType(entry.type) && entry.type !== 'channel' ? (
-                                canRemove() && <button className="btn btn-danger" onClick={() => actions.requestRemove(entry)}>Remove</button>
-                            ) : entry.type === 'channel' ? (
-                                <span className="hint">Delete in Channels view</span>
-                            ) : (
-                                <span className="hint">Manage in Extensions</span>
-                            )}
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
+    const orderedGroups = [...groups].sort(([a],[b]) => groupBy === 'type' ? typeRank(a)-typeRank(b) : groupBy === 'status' ? STATUS_ORDER.indexOf(a)-STATUS_ORDER.indexOf(b) : 0);
+    const selected = visible.find(e => e.id === selectedId);
+    return <div className="cs-catalog">
+        <div className="cs-toolbar">
+            <label className="cs-search"><input className="field" aria-label="Search packages" placeholder="Search community packages…" value={search} onChange={e => setSearch(e.target.value)} /></label>
+            <select className="field" aria-label="Package type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">All package types</option>{types.map(type => <option key={type} value={type}>{TYPE_LABELS[type] || type}</option>)}</select>
+            <select className="field" aria-label="Group packages" value={groupBy} onChange={e => {setGroupBy(e.target.value);setPref('groupBy',e.target.value);}}><option value="status">Group by status</option><option value="type">Group by type</option><option value="none">No grouping</option></select>
+            <select className="field" aria-label="Sort packages" value={sortBy} onChange={e => {setSortBy(e.target.value);setPref('sortBy',e.target.value);}}><option value="name">Sort by name</option><option value="type">Sort by type</option><option value="status">Sort by status</option></select>
+            <span className="cs-result-count" role="status">{entries.length} package{entries.length === 1 ? '' : 's'}</span>
         </div>
-    );
+        <div className="cs-workspace" tabIndex={0} aria-label="Package list">
+            <table className="cs-table"><thead><tr><th scope="col">Package</th><th scope="col">Type</th><th scope="col">Installed</th><th scope="col">Available</th><th scope="col">Status</th></tr></thead>
+                {orderedGroups.map(([key, items]) => <tbody key={key}>
+                    {groupBy !== 'none' ? <tr className="cs-group"><th colSpan={5} scope="rowgroup"><button aria-expanded={!collapsed[groupBy+key]} onClick={() => setCollapsed(old => ({...old,[groupBy+key]:!old[groupBy+key]}))}><span aria-hidden="true">{collapsed[groupBy+key] ? '▸' : '▾'}</span> {groupBy === 'type' ? TYPE_LABELS[key] || key : key} <span className="cs-count">{items.length}</span></button></th></tr> : null}
+                    {(groupBy === 'none' || !collapsed[groupBy+key]) && items.map(entry => <tr key={entry.id} className="cs-package-row" onClick={() => onSelect(entry.id)}>
+                        <td><button className="cs-package" aria-haspopup="dialog" onClick={e => {e.stopPropagation();onSelect(entry.id);}}><PackageIcon type={entry.type} /><span><span className="cs-name">{entry.name}</span><span className="cs-description">{entry.description}</span></span></button></td>
+                        <td>{TYPE_LABELS[entry.type] || entry.type}</td><td>{entry.installedVersion || '—'}</td><td>{entry.revoked ? '—' : entry.version}</td><td><PackageStatus entry={entry} /></td>
+                    </tr>)}
+                </tbody>)}
+            </table>
+            {!entries.length ? <div className="cs-empty">{search || typeFilter ? 'No matches. Try another search or package type.' : tab === 'updates' ? 'No updates available in the current catalog.' : tab === 'installed' ? 'No store packages are installed on this engine.' : 'No packages available. Check your sources and sync status in Settings.'}</div> : null}
+        </div>
+        {selected ? <ConfirmOverlay documentation closeLabel="Close package details" inactive={!!actions.overlay} title={selected.name} onCancel={() => onSelect(null)}><DetailView key={selected.id} entry={selected} actions={actions} /></ConfirmOverlay> : null}
+    </div>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1017,87 +790,56 @@ function CommunityStoreView() {
     const [catalog, setCatalog] = React.useState(null);
     const [error, setError] = React.useState(null);
     const [loading, setLoading] = React.useState(true);
-    const [selected, setSelected] = React.useState(null);
-
+    const [selectedId, setSelectedId] = React.useState(null);
+    const [completion, setCompletion] = React.useState(null);
+    const [staged, setStaged] = React.useState({});
+    const request = React.useRef(0);
     const refresh = async (force) => {
-        setLoading(true);
-        setError(null);
+        const current = ++request.current;
+        setLoading(true); setError(null);
         try {
             const data = await apiGet(`${BASE}/catalog?refresh=${force ? 'true' : 'false'}`);
+            if (request.current !== current) return;
             setCatalog(data);
-            if (selected) {
-                const updated = (data.entries || []).find((e) => e.id === selected.id);
-                setSelected(updated || null);
-            }
-        } catch (e) {
-            setError(errText(e));
-        } finally {
-            setLoading(false);
-        }
+            setStaged(previous => Object.fromEntries(Object.entries(previous).filter(([id, version]) =>
+                !(data.entries || []).some(e => e.id === id && e.installedVersion === version))));
+        } catch (e) { if (request.current === current) setError(errText(e)); }
+        finally { if (request.current === current) setLoading(false); }
     };
-
-    React.useEffect(() => { refresh(false); }, []);
-
-    const actions = useStoreActions(refresh);
-
-    const updates = catalog ? (catalog.entries || []).filter((e) => e.updateAvailable && showsInWebUi(e)).length : 0;
-
-    const banners = (
-        <>
-            {error ? (
-                <div className="panel mb-3"><div className="panel-body">
-                    <span className="text-accent">Could not load the store catalog.</span>{' '}
-                    <span className="text-text-dim">{error}</span>
-                    <div className="hint mt-1">
-                        The Community Store requires the manage-extensions permission, the same
-                        permission used to install extensions manually.
-                    </div>
-                </div></div>
-            ) : null}
-            {catalog && (catalog.errors || []).length > 0 ? (
-                <div className="panel mb-3"><div className="panel-body">
-                    <div className="text-text-dim mb-1">Some sources failed to sync:</div>
-                    {catalog.errors.map((e, i) => (
-                        <div key={i} className="mono text-[12px]">{e.source}: {e.message}</div>
-                    ))}
-                </div></div>
-            ) : null}
-        </>
-    );
-
-    return (
-        <div className="view cs-store flex flex-col flex-1 min-h-0">
-            <style>{STORE_CSS}</style>
-            {actions.overlay}
-            {selected ? (
-                <div className="view-body">
-                    {banners}
-                    <DetailView entry={selected} onBack={() => setSelected(null)} actions={actions} />
-                </div>
-            ) : (
-                <>
-                    <div className="tabs flex-none">
-                        <button className={`tab ${tab === 'browse' ? 'active' : ''}`} onClick={() => setTab('browse')}>Browse</button>
-                        <button className={`tab ${tab === 'installed' ? 'active' : ''}`} onClick={() => setTab('installed')}>
-                            Installed{updates > 0 ? ` (${updates})` : ''}
-                        </button>
-                        {canEditSettings() && <button className={`tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>Settings</button>}
-                        <div className="ml-auto flex items-center gap-2 pr-2">
-                            {catalog && catalog.engineVersion ? <span className="text-text-dim text-[12px]">Engine {catalog.engineVersion}</span> : null}
-                            <button className="btn btn-sm" onClick={() => refresh(true)} disabled={loading}>{loading ? 'Syncing…' : 'Sync now'}</button>
-                        </div>
-                    </div>
-                    <div className="view-body">
-                        {banners}
-                        {tab === 'browse' && catalog ? <BrowseView catalog={catalog} onSelect={setSelected} /> : null}
-                        {tab === 'installed' && catalog ? <InstalledView catalog={catalog} onSelect={setSelected} actions={actions} /> : null}
-                        {tab === 'settings' && canEditSettings() ? <SettingsView catalog={catalog} onSaved={() => refresh(true)} /> : null}
-                        {loading && !catalog ? <div className="text-text-dim">Loading catalog…</div> : null}
-                    </div>
-                </>
-            )}
+    React.useEffect(() => { refresh(false); return () => { request.current++; }; }, []);
+    const actions = useStoreActions(refresh, result => {
+        setCompletion(result);
+        if (result.restartRequired) setStaged(previous => ({ ...previous, [result.entry.id]: result.entry.version }));
+    });
+    const data = catalog ? { ...catalog, entries: (catalog.entries || []).map(entry => ({...entry, stagedVersion: staged[entry.id]})) } : null;
+    const visible = (data?.entries || []).filter(e => e.installedVersion || e.stagedVersion || showsInWebUi(e));
+    const counts = {
+        browse: visible.filter(e => !e.revoked).length,
+        installed: visible.filter(e => e.installedVersion || e.stagedVersion).length,
+        updates: visible.filter(e => e.updateAvailable && !e.stagedVersion && !e.revoked).length,
+    };
+    return <div className="view cs-store flex flex-col flex-1 min-h-0">
+        <style>{STORE_CSS}</style>
+        {actions.overlay}
+        <div className="cs-header">
+            <header className="cs-heading">
+                <div><h1>Community Store</h1><p>Extend your engine. Make it your own.</p></div>
+                <div className="cs-sync"><button className="btn" onClick={() => refresh(true)} disabled={loading || actions.busy}>{loading ? 'Syncing…' : '↻ Sync sources'}</button><div>{catalog ? `Engine ${catalog.engineVersion} · Synced ${new Date(catalog.generatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : 'Connecting to engine'}</div></div>
+            </header>
+            <nav className="cs-tabs" aria-label="Community Store views">
+                {[['browse','Discover'],['installed','Installed'],['updates','Updates'], ...(canEditSettings() ? [['settings','Settings']] : [])].map(([id,label]) =>
+                    <button key={id} className={`cs-tab ${tab === id ? 'active' : ''}`} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}{id !== 'settings' && data ? <span className="cs-count">{counts[id]}</span> : null}</button>)}
+            </nav>
         </div>
-    );
+        <div className="view-body cs-body">
+            {error ? <div className="cs-notice error" role="alert">Could not load the catalog: {error} <button className="btn btn-sm" onClick={() => refresh(true)} disabled={loading}>Retry</button></div> : null}
+            {data?.errors?.length ? <div className="cs-notice warn" role="status"><strong>Some sources could not sync.</strong> Results may be incomplete.{data.errors.map((e,i) => <div key={i}>{e.source}: {e.message}</div>)}</div> : null}
+            {completion ? <div className="cs-notice" role="status">{completion.restartRequired ? `${completion.entry.name} ${completion.entry.version} is staged. Restart the engine to activate it.` : completion.mode === 'remove' ? `${completion.entry.name} was removed.` : `${completion.entry.name} was imported${completion.mode === 'copy' ? ' as a copy' : ''}. It is available now.`} <button className="btn btn-sm" onClick={() => setCompletion(null)} aria-label="Dismiss result">Dismiss</button></div> : null}
+            {tab === 'settings' && canEditSettings() ? <div className="cs-settings-scroll"><SettingsView catalog={catalog} onSaved={() => refresh(true)} /></div>
+                : data ? <CatalogView catalog={data} tab={tab} selectedId={selectedId} onSelect={setSelectedId} actions={actions} />
+                    : loading ? <div className="cs-empty" role="status">Loading community packages…</div> : null}
+        </div>
+    </div>;
 }
 
 /* ------------------------------------------------------------------ */

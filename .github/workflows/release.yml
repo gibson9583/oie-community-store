@@ -85,7 +85,14 @@ jobs:
           sed -i "s|\"version\":[[:space:]]*\"[^\"]*\"|\"version\": \"${VERSION}\"|" webadmin/plugin.json
 
       - name: Build extension
-        run: mvn -B -ntp -DskipTests package
+        run: mvn -B -ntp package
+
+      - name: Check installation safety against engine APIs
+        run: scripts/test-engine-api.sh
+
+      - name: Run web plugin tests
+        working-directory: webadmin
+        run: npm test
 
       - name: Stage the release asset and checksum
         id: pkg

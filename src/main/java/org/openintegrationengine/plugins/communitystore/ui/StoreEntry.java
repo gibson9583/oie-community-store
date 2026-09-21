@@ -44,6 +44,7 @@ class StoreEntry {
     String releaseUrl;
     String source;
     String contentId;
+    String expectedContentHash;
     /** Offered version of a newer channel snapshot, or empty (channels are snapshot-only). */
     String newerSnapshot;
 
@@ -98,6 +99,7 @@ class StoreEntry {
         e.releaseUrl = str(n, "releaseUrl");
         e.source = str(n, "source");
         e.contentId = str(n, "contentId");
+        e.expectedContentHash = str(n, "expectedContentHash");
         e.newerSnapshot = str(n, "newerSnapshot");
 
         e.compatible = n.path("compatible").asBoolean(false);
