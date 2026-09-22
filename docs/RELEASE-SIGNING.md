@@ -56,21 +56,23 @@ Protect release tags and restrict who can modify release workflows or secrets.
   pinned SHA-256 before execution. A vendor binary change requires a reviewed
   pin update. Tool credentials use subprocess arguments, never shell expansion;
   tool output and temporary logs are not published and are removed on exit.
+- Each selected JAR uses the standard `sign` command, which honors the
+  certificate's malware-scan settings. The raw `batch_sign` path can be rejected
+  by eSigner after successful account and TOTP authorization.
 - The JDK checks signature integrity, certificate trust, algorithms and usage.
   An additional verifier requires every payload entry to have exactly one
   signer matching the configured leaf certificate and a verified timestamp.
   Merely returning exit code zero or adding an `.SF` file cannot pass.
 - A missing, extra, unsigned, untrusted, altered, differently signed or partially
   signed JAR stops publication. If any JAR fails, the original ZIP stays intact.
-  A successful batch changes only the selected JAR entries; final ZIP checksums
+  Successful signing changes only the selected JAR entries; final ZIP checksums
   and any attestations describe the signed package.
-- No automatic signing retries are made: a partial batch may already have used
+- No automatic signing retries are made: a partial run may already have used
   signing quota. Rerunning a release builds and signs again and can incur further
   signature usage. Same-tag runs are serialized within this repository;
   different repositories can sign concurrently. If SSL.com rejects overlapping
   requests for the same credential, stagger the releases and rerun the failed job.
-- Each signed JAR can count against your plan's signature allowance; batching
-  does not imply one billable signature for a whole ZIP.
+- Each signed JAR can count against your plan's signature allowance.
 - Local tests use temporary test certificates and a local timestamp responder.
   They do not contact SSL.com or use production secrets. The first real signing
   run remains necessary to validate account enrollment, quota and the issued chain.

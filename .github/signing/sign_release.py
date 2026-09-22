@@ -127,37 +127,41 @@ def cloud_sign(tool, inputs, outputs):
     # Use an argument array: passwords are never interpolated into shell code.
     # CodeSignTool can log credentials/tokens; keep all its output private and
     # delete its working directory (including logs) when this invocation ends.
-    command = [tool_java(), "-jar", str(tool), "batch_sign",
-               "-username=" + os.environ["SSL_COM_USERNAME"],
-               "-password=" + os.environ["SSL_COM_PASSWORD"],
-               "-credential_id=" + os.environ["SSL_COM_CREDENTIAL_ID"],
-               "-totp_secret=" + os.environ["SSL_COM_TOTP_SECRET"],
-               "-input_dir_path=" + str(inputs), "-output_dir_path=" + str(outputs)]
-    try:
-        result = subprocess.run(command, cwd=tool.parent.parent, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
-    except subprocess.TimeoutExpired:
-        raise ValueError("SSL.com signing timed out; the release ZIP was not changed") from None
-    if result.returncode or {path.name for path in outputs.iterdir()} != {path.name for path in inputs.iterdir()}:
-        # Report fixed categories only: raw tool output may contain access tokens.
-        output = result.stdout.decode(errors="replace").lower()
-        compact = re.sub(r"[^a-z]", "", output)
-        reasons = []
-        for indicators, reason in (
-            (("invalidotp", "otpinvalid", "incorrectotp"), "invalid signing OTP; check SSL_COM_TOTP_SECRET"),
-            (("illegalbase64", "base64character", "invalidtotp"), "invalid TOTP secret encoding"),
-            (("invalidgrant", "invalidcredentials", "invalidpassword"), "account authentication rejected"),
-            (("quota", "subscription", "insufficient"), "check eSigner subscription and signing quota"),
-            (("illegalaccesserror", "noclassdeffounderror"), "CodeSignTool Java runtime is incompatible"),
-            (("sslhandshakeexception",), "CodeSignTool TLS connection failed"),
-            (("accessdenied", "notauthorized", "permissiondenied"), "signing authorization denied"),
-        ):
-            if any(indicator in compact for indicator in indicators):
-                reasons.append(reason)
-        detail = "; ".join(reasons) or "check eSigner enrollment, credentials and quota"
-        raise ValueError("SSL.com signing failed: " + detail)
-    # Some CodeSignTool errors exit zero. The complete output set and real Java
-    # signatures are checked independently below, never inferred from its log.
+    # The standard sign command honors per-certificate malware-scan settings;
+    # batch_sign can be rejected by eSigner even when account/TOTP auth succeeds.
+    executable = tool_java()
+    for path in sorted(inputs.iterdir()):
+        command = [executable, "-jar", str(tool), "sign",
+                   "-username=" + os.environ["SSL_COM_USERNAME"],
+                   "-password=" + os.environ["SSL_COM_PASSWORD"],
+                   "-credential_id=" + os.environ["SSL_COM_CREDENTIAL_ID"],
+                   "-totp_secret=" + os.environ["SSL_COM_TOTP_SECRET"],
+                   "-input_file_path=" + str(path), "-output_dir_path=" + str(outputs)]
+        try:
+            result = subprocess.run(command, cwd=tool.parent.parent, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+        except subprocess.TimeoutExpired:
+            raise ValueError("SSL.com signing timed out; the release ZIP was not changed") from None
+        if result.returncode or not (outputs / path.name).is_file():
+            # Report fixed categories only: raw tool output may contain access tokens.
+            output = result.stdout.decode(errors="replace").lower()
+            compact = re.sub(r"[^a-z]", "", output)
+            reasons = []
+            for indicators, reason in (
+                (("invalidotp", "otpinvalid", "incorrectotp"), "invalid signing OTP; check SSL_COM_TOTP_SECRET"),
+                (("illegalbase64", "base64character", "invalidtotp"), "invalid TOTP secret encoding"),
+                (("invalidgrant", "invalidcredentials", "invalidpassword"), "account authentication rejected"),
+                (("quota", "subscription", "insufficient"), "check eSigner subscription and signing quota"),
+                (("illegalaccesserror", "noclassdeffounderror"), "CodeSignTool Java runtime is incompatible"),
+                (("sslhandshakeexception",), "CodeSignTool TLS connection failed"),
+                (("accessdenied", "notauthorized", "permissiondenied"), "signing authorization denied"),
+            ):
+                if any(indicator in compact for indicator in indicators):
+                    reasons.append(reason)
+            detail = "; ".join(reasons) or "check eSigner enrollment, credentials and quota"
+            raise ValueError("SSL.com signing failed: " + detail)
+    # Exit zero and output presence are insufficient: verify every signature
+    # and the exact complete output set before replacing any release ZIP.
 
 
 def verify_jar(path, expected_fingerprint, *, truststore=None):

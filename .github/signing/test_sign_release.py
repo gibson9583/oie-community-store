@@ -284,15 +284,21 @@ ess_cert_id_alg = sha256
     def test_credentials_are_literal_arguments_and_not_error_output(self):
         env = {name: 'sensitive " $() ` value' for name in signing.SECRET_NAMES}
         env['CODESIGNTOOL_JAVA'] = '/private/java11/bin/java'
+        inputs, outputs = Path(self.work.name) / "inputs", Path(self.work.name) / "outputs"
+        inputs.mkdir()
+        outputs.mkdir()
+        (inputs / "one with spaces.jar").write_bytes(self.unsigned)
         with patch.dict(os.environ, env), patch.object(signing.subprocess, "run") as run:
             run.return_value.returncode = 1
             run.return_value.stdout = b"a sensitive access token"
             with self.assertRaises(ValueError) as error:
-                signing.cloud_sign(Path("/tmp/tool/jar/tool.jar"), Path("/tmp/in"), Path("/tmp/out"))
+                signing.cloud_sign(Path("/tmp/tool/jar/tool.jar"), inputs, outputs)
             self.assertNotIn("sensitive", str(error.exception))
             self.assertEqual(run.call_args.args[0][0], env["CODESIGNTOOL_JAVA"])
             self.assertIn("-password=" + env["SSL_COM_PASSWORD"], run.call_args.args[0])
             self.assertFalse(run.call_args.kwargs.get("shell", False))
+            self.assertIn("sign", run.call_args.args[0])
+            self.assertIn("-input_file_path=" + str(inputs / "one with spaces.jar"), run.call_args.args[0])
 
     def test_missing_tool_runtime_fails_before_cloud_request(self):
         for value in ("", "java", "relative/java"):
@@ -348,6 +354,52 @@ ess_cert_id_alg = sha256
         config = json.loads((signing.HERE / "config.json").read_text())
         self.assertTrue(config["bundle"].endswith(".zip"))
         self.assertTrue(config["jars"])
+
+    def test_multiple_jars_use_individual_sign_commands(self):
+        inputs, outputs = Path(self.work.name) / "inputs", Path(self.work.name) / "outputs"
+        inputs.mkdir()
+        outputs.mkdir()
+        for name in ("one.jar", "two.jar"):
+            (inputs / name).write_bytes(self.unsigned)
+        env = {name: "fixture-only" for name in signing.SECRET_NAMES}
+        env["CODESIGNTOOL_JAVA"] = "/private/java11/bin/java"
+
+        def sign(command, **kwargs):
+            source = Path(next(value.split("=", 1)[1] for value in command if value.startswith("-input_file_path=")))
+            self.assertEqual(command[3], "sign")
+            self.assertFalse(any(value.startswith("-input_dir_path=") for value in command))
+            (outputs / source.name).write_bytes(self.signed)
+            return subprocess.CompletedProcess(command, 0, b"success")
+
+        with patch.dict(os.environ, env), patch.object(signing.subprocess, "run", side_effect=sign) as run:
+            signing.cloud_sign(Path("/tmp/tool/jar/tool.jar"), inputs, outputs)
+            self.assertEqual(run.call_count, 2)
+        for name in ("one.jar", "two.jar"):
+            self.assertEqual((inputs / name).read_bytes(), self.unsigned)
+            self.verify(outputs / name)
+
+    def test_second_service_failure_preserves_zip_and_does_not_retry(self):
+        env = {name: "fixture-only" for name in signing.SECRET_NAMES}
+        env["CODESIGNTOOL_JAVA"] = "/private/java11/bin/java"
+        calls = []
+        scratch = []
+
+        def sign(command, **kwargs):
+            calls.append(command)
+            outputs = Path(next(value.split("=", 1)[1] for value in command if value.startswith("-output_dir_path=")))
+            scratch.append(outputs.parent)
+            if len(calls) == 1:
+                (outputs / "one.jar").write_bytes(self.signed)
+            return subprocess.CompletedProcess(command, 0, b"private-vendor-response")
+
+        with patch.dict(os.environ, env), \
+                patch.object(signing, "install_tool", return_value=Path("/tmp/tool/jar/tool.jar")), \
+                patch.object(signing.subprocess, "run", side_effect=sign):
+            with self.assertRaisesRegex(ValueError, "SSL.com signing failed"):
+                signing.sign_bundle(self.bundle, self.patterns, self.fingerprint)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self.bundle.read_bytes(), self.original)
+        self.assertTrue(all(not path.exists() for path in scratch))
 
 
 if __name__ == "__main__":
