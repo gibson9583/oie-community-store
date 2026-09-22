@@ -48,6 +48,10 @@ Protect release tags and restrict who can modify release workflows or secrets.
 
 ## Operational behavior
 
+- CodeSignTool runs on a separate JDK 11 selected through `CODESIGNTOOL_JAVA`.
+  Its JAR implementation uses internal APIs unavailable on newer JDKs. Builds
+  and strict signature verification keep their existing JDK 17/21. CI exercises
+  the real vendor JAR hashing path without credentials before release signing.
 - CodeSignTool 1.3.2 is downloaded from SSL.com's release and checked against a
   pinned SHA-256 before execution. A vendor binary change requires a reviewed
   pin update. Tool credentials use subprocess arguments, never shell expansion;

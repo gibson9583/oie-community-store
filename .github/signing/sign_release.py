@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Sign the explicitly selected plugin JARs, then atomically replace the ZIP.
 
-Requires Python 3.10+ and JDK 17+. No third-party Python dependencies.
+Requires Python 3.10+, JDK 17+ for verification and a separate JDK 11 for
+CodeSignTool (CODESIGNTOOL_JAVA). No third-party Python dependencies.
 """
 
 import argparse
@@ -97,11 +98,36 @@ def install_tool(directory):
     return directory / "jar/code_sign_tool-1.3.2.jar"
 
 
+def tool_java():
+    executable = os.environ.get("CODESIGNTOOL_JAVA", "")
+    if not executable or not Path(executable).is_absolute():
+        raise ValueError("CODESIGNTOOL_JAVA must be the absolute path to the JDK 11 java executable")
+    return executable
+
+
+def check_tool():
+    # Exercise the vendor's real JAR hashing path without an account or a paid
+    # signature. --help does not load the JDK-internal classes this path needs.
+    executable = tool_java()
+    with tempfile.TemporaryDirectory(prefix="sslcom-probe-", dir=os.environ.get("RUNNER_TEMP")) as temp:
+        work = Path(temp).resolve()
+        tool = install_tool(work / "tool")
+        jar = work / "probe.jar"
+        with zipfile.ZipFile(jar, "w") as archive:
+            archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\r\n\r\n")
+            archive.writestr("probe.txt", "CodeSignTool compatibility check")
+        result = subprocess.run([executable, "-cp", str(tool), str(HERE / "CheckCodeSignTool.java"), str(jar)],
+                                cwd=tool.parent.parent, capture_output=True, text=True, timeout=120)
+        if result.returncode:
+            raise ValueError("CodeSignTool JAR compatibility check failed; use JDK 11 via CODESIGNTOOL_JAVA")
+    print("CodeSignTool JAR hashing passed on JDK 11; no signature requested")
+
+
 def cloud_sign(tool, inputs, outputs):
     # Use an argument array: passwords are never interpolated into shell code.
     # CodeSignTool can log credentials/tokens; keep all its output private and
     # delete its working directory (including logs) when this invocation ends.
-    command = ["java", "-jar", str(tool), "batch_sign",
+    command = [tool_java(), "-jar", str(tool), "batch_sign",
                "-username=" + os.environ["SSL_COM_USERNAME"],
                "-password=" + os.environ["SSL_COM_PASSWORD"],
                "-credential_id=" + os.environ["SSL_COM_CREDENTIAL_ID"],
@@ -112,8 +138,24 @@ def cloud_sign(tool, inputs, outputs):
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
     except subprocess.TimeoutExpired:
         raise ValueError("SSL.com signing timed out; the release ZIP was not changed") from None
-    if result.returncode:
-        raise ValueError("SSL.com signing failed; check eSigner enrollment, credentials and quota")
+    if result.returncode or {path.name for path in outputs.iterdir()} != {path.name for path in inputs.iterdir()}:
+        # Report fixed categories only: raw tool output may contain access tokens.
+        output = result.stdout.decode(errors="replace").lower()
+        compact = re.sub(r"[^a-z]", "", output)
+        reasons = []
+        for indicators, reason in (
+            (("invalidotp", "otpinvalid", "incorrectotp"), "invalid signing OTP; check SSL_COM_TOTP_SECRET"),
+            (("illegalbase64", "base64character", "invalidtotp"), "invalid TOTP secret encoding"),
+            (("invalidgrant", "invalidcredentials", "invalidpassword"), "account authentication rejected"),
+            (("quota", "subscription", "insufficient"), "check eSigner subscription and signing quota"),
+            (("illegalaccesserror", "noclassdeffounderror"), "CodeSignTool Java runtime is incompatible"),
+            (("sslhandshakeexception",), "CodeSignTool TLS connection failed"),
+            (("accessdenied", "notauthorized", "permissiondenied"), "signing authorization denied"),
+        ):
+            if any(indicator in compact for indicator in indicators):
+                reasons.append(reason)
+        detail = "; ".join(reasons) or "check eSigner enrollment, credentials and quota"
+        raise ValueError("SSL.com signing failed: " + detail)
     # Some CodeSignTool errors exit zero. The complete output set and real Java
     # signatures are checked independently below, never inferred from its log.
 
@@ -195,9 +237,15 @@ def sign_bundle(bundle, patterns, expected_fingerprint):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check-config", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check-config", action="store_true")
+    mode.add_argument("--check-tool", action="store_true")
     args = parser.parse_args()
+    if args.check_tool:
+        check_tool()
+        return
     expected_fingerprint = check_config()
+    tool_java()
     if args.check_config:
         print("SSL.com signing configuration is present")
         return

@@ -283,19 +283,62 @@ ess_cert_id_alg = sha256
 
     def test_credentials_are_literal_arguments_and_not_error_output(self):
         env = {name: 'sensitive " $() ` value' for name in signing.SECRET_NAMES}
+        env['CODESIGNTOOL_JAVA'] = '/private/java11/bin/java'
         with patch.dict(os.environ, env), patch.object(signing.subprocess, "run") as run:
             run.return_value.returncode = 1
             run.return_value.stdout = b"a sensitive access token"
             with self.assertRaises(ValueError) as error:
                 signing.cloud_sign(Path("/tmp/tool/jar/tool.jar"), Path("/tmp/in"), Path("/tmp/out"))
             self.assertNotIn("sensitive", str(error.exception))
+            self.assertEqual(run.call_args.args[0][0], env["CODESIGNTOOL_JAVA"])
             self.assertIn("-password=" + env["SSL_COM_PASSWORD"], run.call_args.args[0])
             self.assertFalse(run.call_args.kwargs.get("shell", False))
+
+    def test_missing_tool_runtime_fails_before_cloud_request(self):
+        for value in ("", "java", "relative/java"):
+            with self.subTest(value=value), patch.dict(os.environ, {"CODESIGNTOOL_JAVA": value}), \
+                    patch.object(signing.subprocess, "run") as run:
+                with self.assertRaisesRegex(ValueError, "JDK 11"):
+                    signing.cloud_sign(Path("unused"), Path("in"), Path("out"))
+                run.assert_not_called()
+
+    def test_zero_exit_with_service_error_is_rejected_without_leaking_output(self):
+        inputs, outputs = Path(self.work.name) / "inputs", Path(self.work.name) / "outputs"
+        inputs.mkdir()
+        outputs.mkdir()
+        (inputs / "one.jar").write_bytes(self.unsigned)
+        env = {name: "fixture-only" for name in signing.SECRET_NAMES}
+        env["CODESIGNTOOL_JAVA"] = "/private/java11/bin/java"
+        with patch.dict(os.environ, env), patch.object(signing.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = b"access_token=private-response-token\nError: invalid otp"
+            with self.assertRaisesRegex(ValueError, "invalid signing OTP") as error:
+                signing.cloud_sign(Path("/tmp/tool/jar/tool.jar"), inputs, outputs)
+            self.assertNotIn("private-response-token", str(error.exception))
+            self.assertNotIn("access_token", str(error.exception))
+            self.assertEqual(run.call_count, 1)
+
+    def test_unrecognized_zero_exit_failure_does_not_leak_vendor_output(self):
+        inputs, outputs = Path(self.work.name) / "inputs", Path(self.work.name) / "outputs"
+        inputs.mkdir()
+        outputs.mkdir()
+        (inputs / "one.jar").write_bytes(self.unsigned)
+        env = {name: "fixture-only" for name in signing.SECRET_NAMES}
+        env["CODESIGNTOOL_JAVA"] = "/private/java11/bin/java"
+        with patch.dict(os.environ, env), patch.object(signing.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = b"private-unrecognized-vendor-response"
+            with self.assertRaisesRegex(ValueError, "SSL.com signing failed") as error:
+                signing.cloud_sign(Path("/tmp/tool/jar/tool.jar"), inputs, outputs)
+            self.assertNotIn("private-unrecognized-vendor-response", str(error.exception))
+            self.assertEqual(run.call_count, 1)
 
     def test_release_workflow_orders_signing_before_publication(self):
         workflow = (signing.HERE.parent / "workflows/release.yml").read_text()
         self.assertIn("if: startsWith(github.ref, 'refs/tags/v')", workflow)
         preflight = workflow.index("sign_release.py --check-config")
+        self.assertIn("steps.codesign-java.outputs.path", workflow)
+        self.assertIn("sign_release.py --check-tool", workflow)
         sign = workflow.index("run: python3 .github/signing/sign_release.py\n")
         publish = workflow.index("uses: softprops/action-gh-release@")
         self.assertLess(preflight, sign)
