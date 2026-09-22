@@ -73,7 +73,7 @@ public class CommunityStoreServicePlugin implements ServicePlugin {
                 new ExtensionPermission(PLUGIN_POINT,
                         CommunityStoreServletInterface.PERMISSION_VIEW,
                         "Browse the Community Store catalog and read publisher documentation.",
-                        new String[] { "getCommunityStoreCatalog", "getCommunityStoreDocs" },
+                        new String[] { "getCommunityStoreCatalog", "getCommunityStoreDocs", "getCommunityStoreDownloads" },
                         new String[] { "doShowCommunityStore" }),
                 new ExtensionPermission(PLUGIN_POINT,
                         CommunityStoreServletInterface.PERMISSION_MANAGE,

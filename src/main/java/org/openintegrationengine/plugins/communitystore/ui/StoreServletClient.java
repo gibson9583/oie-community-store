@@ -59,9 +59,11 @@ class StoreServletClient {
      * {@code newLibrary}/{@code targetLibraryId} apply only when a standalone code-template
      * needs library placement (fresh install or copy) and are omitted otherwise.
      */
-    JsonNode install(String id, String tag, String mode, String newLibrary, String targetLibraryId) throws Exception {
+    JsonNode install(String id, String tag, String mode, String newLibrary, String targetLibraryId, String expectedContentHash, boolean overwrite) throws Exception {
         ObjectNode req = MAPPER.createObjectNode();
         req.put("id", id);
+        req.put("expectedContentHash", expectedContentHash);
+        req.put("overwrite", overwrite);
         if (tag != null && !tag.isEmpty()) {
             req.put("tag", tag);
         }

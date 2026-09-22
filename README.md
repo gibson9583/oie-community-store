@@ -2,7 +2,11 @@
 
 A community package store for [Open Integration Engine](https://openintegrationengine.org) with no project-hosted infrastructure. It distributes **extensions** (plugins, connectors, data types — built `.zip`s, installed through the engine's extension installer) and **content** (channels, code templates, code template libraries — XML exports, or plain `.js` files for code templates, imported through the engine's APIs, no restart). Packages come from two kinds of sources: the curated [community catalog](https://github.com/gibson9583/oie-community-catalog) — a static, PR-reviewed index whose entries carry an artifact URL on **any** https host plus its sha256 — and direct GitHub repository/organization crawls (HACS-style: an `oie.json` manifest per repo, artifacts on GitHub Releases) as the zero-setup publisher on-ramp. Either way the engine downloads, sha256-verifies, and installs everything itself.
 
-## Screenshots
+## Administrator experience
+
+The web store uses a full-width package table with collapsible status or type groups, type filtering, and sorting by name, type, or status. Clicking a package opens a wide details modal with documentation and installation actions. The heading and search controls stay fixed while the table scrolls. Colors, fonts, controls, and package glyphs follow the administrator theme. Discover, Installed, Updates, and Settings remain separate views; staged extensions show a restart-pending state during the current view session.
+
+## Screenshots (previous layout)
 
 **Browse** — discover connectors, plugins, data types, channels, and code templates from the community catalog and GitHub releases:
 
@@ -47,6 +51,24 @@ communitystore/
 ```
 
 The `mirthVersion` in `plugin.xml` must match your engine version (comma-separated values are accepted by the engine's compatibility check).
+
+## Validation
+
+With `OIE_HOME` pointing to an engine distribution or `server/setup` tree:
+
+```sh
+mvn package
+scripts/test-engine-api.sh
+npm --prefix webadmin test
+```
+
+Maven runs content-fingerprint, operation-guard, and ZIP-preflight regression tests. The engine API checks exercise the actual install service and engine XML serializer with controlled controller I/O, including consent-token round trips, stale edits, native write monitors, copy preservation, checksum/preflight rejection, and extension staging. They do not start an engine or database. Web tests render the real React components and click their controls. Both build and release workflows run these checks, including the Swing markdown test.
+
+Content updates now require `mode: "upgrade"` and `expectedContentHash` from the catalog entry reviewed by the user. Modified or legacy/untracked content also requires explicit `overwrite: true`. The server compares the token after downloading and holds the native controller write monitor through validation and mutation. Missing/stale tokens fail closed; old clients must refresh/reload to use the new confirmation contract. Default `install` only creates absent content; installed channels must use `copy`.
+
+Fingerprint format 2 preserves code text and hashes template metadata as well as library membership. Older ledger hashes are treated as unknown local changes until an explicitly confirmed replacement establishes the new baseline. Extension ZIPs must contain exactly one package root matching the catalog ID; every root descriptor must match the ID and offered version. Nested/duplicate descriptors, path aliases, oversized descriptors, and excessive decompressed content are rejected.
+
+Multi-step engine content writes still do not provide database rollback or retry idempotency for copies. A database/API failure after a write may need manual recovery; the controller monitor protects against concurrent edits, not partial storage failures.
 
 ## Continuous integration & releases
 
@@ -128,7 +150,7 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 
 ## Security notes
 
-* Artifacts are verified server side against the published sha256 before installation. This proves transport integrity, not publisher identity; the sidecar comes from the same release. Artifact signing is a planned follow-on.
+* Artifacts are verified server side against the published sha256 before installation. This proves transport integrity, not publisher identity; the sidecar comes from the same release. The Community Store's own release JARs are signed with an SSL.com code-signing certificate, but store installation does not enforce publisher signatures on downloaded packages.
 * The install confirmation states plainly that community content is not vetted by the OIE project. Installing an extension runs its code in the engine; the trust model is identical to manual extension installs.
 * The optional GitHub PAT is stored encrypted via the engine's configuration encryptor and is never returned to the browser (write-only setting). It is attached only to GitHub-family hosts — never sent to third-party catalog or artifact hosts.
 * Pre-flight rejects zips containing path traversal entries and descriptor/id mismatches.
@@ -141,8 +163,14 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 * No dependency resolution between plugins.
 * Update detection for extensions relies on `id` matching the extension path and versions being comparable semver. Installed content is a snapshot the user owns: code templates and libraries offer in-place upgrades (with a warning and an install-as-copy option when the local copy has been modified), while channels are a snapshot gallery — imported once, installed as a separate copy thereafter, and deleted from the Channels view (the store never deletes a channel).
 * Content resolved from the GitHub crawl (rather than the catalog) is verified by TLS only unless the manifest supplies a checksum; catalog packages are always sha256-verified.
-* No artifact signing yet (sha256 proves integrity, not publisher identity) — a sigstore-based signing roadmap is planned.
+* Publisher-signature verification is not enforced during package installation; the store currently checks published sha256 digests.
 
 ## License
 
 MPL-2.0, matching the engine.
+
+### Download counts
+
+The web package table and details show all-version downloads for supported GitHub release installer ZIPs. Statistics load independently of the catalog and are cached for one hour (unavailable results retry after five minutes). Counts sum matching installer filenames across retained, non-draft releases, including prereleases. Release and asset pagination is followed; incomplete or failed lookups show `—`, never a partial total. Zero is displayed as `0`.
+
+Matching uses the current installer filename with its version replaced by each release tag (with an optional leading `v` removed). Renamed installer families, nonstandard version tags, deleted releases, source archives, checksums, other ZIP variants, and non-GitHub hosts are excluded or unavailable. Counts include repeats and automation; they are not unique users or successful installations. The engine does not send installation telemetry. Resource limits (200 API requests or a one-minute traversal budget, checked between requests) produce unavailable rather than misleading totals.

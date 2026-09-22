@@ -69,6 +69,12 @@ public interface CommunityStoreServletInterface extends BaseServletInterface {
     public String getDocs(@Param("id") @PathParam("id") String id) throws ClientException;
 
     @GET
+    @Path("/catalog/{id}/downloads")
+    @Operation(summary = "Returns cached all-version installer asset downloads, when available.")
+    @MirthOperation(name = "getCommunityStoreDownloads", display = "Get Community Store downloads", permission = PERMISSION_VIEW, auditable = false)
+    public String getDownloads(@Param("id") @PathParam("id") String id) throws ClientException;
+
+    @GET
     @Path("/settings")
     @Operation(summary = "Returns Community Store settings. The GitHub token is never included.")
     @MirthOperation(name = "getCommunityStoreSettings", display = "Get Community Store settings", permission = PERMISSION_MANAGE, auditable = false)

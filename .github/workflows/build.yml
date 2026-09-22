@@ -57,11 +57,14 @@ jobs:
       # Compiles the jar, builds the web frontend (plugin.jsx -> plugin.js via the
       # frontend-maven-plugin), and assembles target/communitystore-<version>.zip.
       - name: Build extension
-        run: mvn -B -ntp -DskipTests package
+        run: mvn -B -ntp package
+
+      - name: Check installation safety against engine APIs
+        run: scripts/test-engine-api.sh
 
       - name: Run web plugin tests
         working-directory: webadmin
-        run: node web/markdown.test.mjs
+        run: npm test
 
       - uses: actions/upload-artifact@v4
         with:

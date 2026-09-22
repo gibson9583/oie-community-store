@@ -1,7 +1,7 @@
 # Publishes the Community Store to GitHub Releases so it can update itself through
 # the store (the store lists its own repo as a source). Trigger with a semver tag:
 #
-#   git tag v0.2.0 && git push origin v0.2.0
+#   git tag v0.8.0 && git push origin v0.8.0
 #
 # The tag drives the version stamped into the pom (zip name), plugin.xml
 # (pluginVersion — what the engine reports as "installed", so self-update detection
@@ -111,7 +111,14 @@ jobs:
           sed -i "s|\"version\":[[:space:]]*\"[^\"]*\"|\"version\": \"${VERSION}\"|" webadmin/plugin.json
 
       - name: Build extension
-        run: mvn -B -ntp -DskipTests package
+        run: mvn -B -ntp package
+
+      - name: Check installation safety against engine APIs
+        run: scripts/test-engine-api.sh
+
+      - name: Run web plugin tests
+        working-directory: webadmin
+        run: npm test
 
       - name: Sign and verify release JARs with SSL.com
         env:

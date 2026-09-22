@@ -2110,60 +2110,92 @@ function renderDocsHtml(markdown, repo, tag2, images, bases) {
   return html2;
 }
 
+// web/store-style.js
+var STORE_CSS = `
+.cs-store { font-family: var(--font-ui); color: var(--text); }
+.cs-store { min-height:0; overflow:hidden; }
+.cs-store .cs-header { flex:none; padding:24px 24px 0; }
+.cs-store .cs-body { padding:0 24px 24px; overflow:hidden; min-height:0; display:flex; flex-direction:column; }
+.cs-store .cs-catalog { display:flex; flex-direction:column; flex:1; min-height:0; }
+.cs-store .cs-toolbar { flex:none; }
+.cs-store .cs-settings-scroll { overflow:auto; min-height:0; }
+.cs-store .cs-body > .cs-notice { flex-shrink:0; max-height:25%; overflow:auto; }
+.cs-store .cs-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:22px; }
+.cs-store .cs-heading h1 { margin:0 0 4px; font-size:22px; font-weight:700; letter-spacing:-.7px; }
+.cs-store .cs-heading p { margin:0; color:var(--text-dim); }
+.cs-store .cs-sync { text-align:right; font-size:11px; color:var(--text-dim); }
+.cs-store .cs-sync button { margin-bottom:6px; }
+.cs-store .cs-tabs { display:flex; gap:24px; border-bottom:1px solid var(--line); margin-bottom:22px; }
+.cs-store .cs-tab { padding:10px 0 13px; border:0; border-bottom:3px solid transparent; background:none; color:var(--text-dim); cursor:pointer; font:inherit; }
+.cs-store .cs-tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:650; }
+.cs-store .cs-count { margin-left:6px; padding:2px 6px; border-radius:5px; font-size:11px; background:var(--accent-glow); }
+.cs-store .cs-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.cs-store .cs-search { flex:1; min-width:180px; }
+.cs-store .cs-search .field { width:100%; padding:11px 14px; }
+.cs-store .cs-toolbar select { width:auto; max-width:230px; padding:10px 32px 10px 12px; }
+.cs-store .cs-result-count { color:var(--text-dim); font-size:12px; white-space:nowrap; }
+.cs-store .cs-workspace { overflow:auto; min-height:0; flex:1; border:1px solid var(--line); border-radius:8px; }
+.cs-store .cs-package { width:100%; display:flex; gap:12px; align-items:center; text-align:left; border:0; padding:0; background:none; color:var(--text); font:inherit; cursor:pointer; }
+.cs-store .cs-icon { flex-shrink:0; display:grid; place-items:center; width:44px; height:44px; border-radius:11px; border:1px solid var(--line); background:var(--accent-glow); color:var(--accent); }
+.cs-store .cs-icon svg { width:23px; height:23px; }
+.cs-store .cs-name { display:block; font-size:14px; font-weight:650; margin:0 0 5px; overflow-wrap:anywhere; }
+.cs-store .cs-description { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--text-dim); font-size:12px; line-height:1.6; }
+.cs-store .cs-meta { display:flex; gap:9px; flex-wrap:wrap; color:var(--text-dim); font-size:11px; margin-top:10px; overflow-wrap:anywhere; }
+.cs-store .cs-pill { display:inline-block; border-radius:5px; padding:3px 8px; color:var(--text-dim); background:var(--bg3); font-size:11px; line-height:1.5; white-space:nowrap; }
+.cs-store .cs-pill.update { color:var(--accent); background:var(--accent-glow); }
+.cs-store .cs-pill.ok { color:var(--ok); background:color-mix(in srgb,var(--ok) 12%,transparent); }
+.cs-store .cs-pill.warn { color:var(--warn); background:color-mix(in srgb,var(--warn) 12%,transparent); }
+.cs-store .cs-pill.error { color:var(--err); background:color-mix(in srgb,var(--err) 12%,transparent); }
+.cs-store .cs-detail { padding:0; min-width:0; }
+.cs-store .cs-detail h2 { margin:16px 0 5px; font-size:21px; line-height:1.3; letter-spacing:-.4px; overflow-wrap:anywhere; }
+.cs-store .cs-detail-description { color:var(--text-dim); line-height:1.7; margin:17px 0; }
+.cs-store .cs-facts { border-top:1px solid var(--line); padding-top:12px; margin:20px 0; font-size:12px; }
+.cs-store .cs-fact { display:flex; gap:12px; justify-content:space-between; padding:7px 0; }
+.cs-store .cs-fact dt { color:var(--text-dim); }
+.cs-store .cs-fact dd { margin:0; text-align:right; overflow-wrap:anywhere; min-width:0; }
+.cs-store .cs-notice { padding:12px 14px; background:var(--bg2); border:1px solid var(--line); border-radius:8px; margin-bottom:15px; font-size:12px; overflow-wrap:anywhere; }
+.cs-store .cs-notice.warn { color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%,var(--line)); }
+.cs-store .cs-notice.error { color:var(--err); border-color:color-mix(in srgb,var(--err) 30%,var(--line)); }
+.cs-store .cs-primary-action { width:100%; justify-content:center; padding:11px; }
+.cs-store .cs-package-info { font-size:12px; margin-top:18px; }
+.cs-store .cs-package-info summary { cursor:pointer; color:var(--text-dim); }
+.cs-store .cs-detail-links { display:flex; gap:14px; flex-wrap:wrap; margin-top:18px; font-size:12px; }
+.cs-store .cs-detail-links a { overflow-wrap:anywhere; }
+.cs-store .cs-footnote { font-size:11px; line-height:1.6; color:var(--text-dim); margin:12px 0; }
+.cs-store .cs-empty { padding:28px; color:var(--text-dim); }
+.cs-store .cs-docs-toggle { width:100%; text-align:left; margin-top:20px; }
+.cs-store .tag { white-space:nowrap; }
+.cs-store .cs-docs { font-size:12px; }
+.cs-store button:focus-visible, .cs-store a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.cs-store .cs-package:focus-visible { outline-offset:-3px; }
+.cs-store .cs-overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); z-index:1000; padding:20px; }
+.cs-store .cs-dialog { width:500px; max-width:100%; max-height:90vh; overflow:auto; box-shadow:var(--shadow); }
+.cs-store .cs-documentation-dialog { width:1000px; height: min(85vh,900px); display:flex; flex-direction:column; overflow:hidden; }
+.cs-store .cs-documentation-dialog > .panel-header { flex:none; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.cs-store .cs-documentation-dialog > .panel-body { overflow:auto; min-height:0; flex:1; }
+.cs-store .cs-documentation-dialog .cs-docs { font-size:14px; line-height:1.7; }
+.cs-store .cs-documentation-dialog .panel { margin:0; border:0; box-shadow:none; }
+.cs-store .cs-dialog-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:20px; }
+.cs-store .cs-dialog .field { max-width:100% !important; }
+.cs-store .cs-table { width:100%; border-collapse:separate; border-spacing:0; text-align:left; }
+.cs-store .cs-table th, .cs-store .cs-table td { padding:12px 16px; border-bottom:1px solid var(--line); font-size:12px; }
+.cs-store .cs-table thead th { position:sticky; top:0; z-index:1; background:var(--bg2); color:var(--text-dim); white-space:nowrap; }
+.cs-store .cs-table td:first-child { width:52%; min-width:260px; }
+.cs-store .cs-table td:not(:first-child) { white-space:nowrap; }
+.cs-store .cs-package-row { background:var(--bg1); cursor:pointer; }
+.cs-store .cs-package-row:hover { background:var(--bg2); }
+.cs-store .cs-group th { background:var(--bg2); padding:0; }
+.cs-store .cs-group button { width:100%; padding:12px 16px; text-align:left; border:0; background:none; color:var(--text); font:inherit; cursor:pointer; }
+.cs-store .cs-table .cs-icon { width:30px; height:30px; border:0; border-radius:0; background:none; }
+@media(max-width:800px) { .cs-store .cs-workspace { overflow:auto; min-height:0; flex:1; border:1px solid var(--line); border-radius:8px; } .cs-store .cs-body { padding:0 16px 16px; } .cs-store .cs-header { padding:16px 16px 0; } .cs-store .cs-tabs { gap:18px; flex-wrap:wrap; } .cs-store .cs-heading { align-items:flex-start; } .cs-store .cs-search { min-width:100%; } }
+`;
+
 // web/plugin.jsx
 var canInstall = () => platform.checkTask("", "doInstallStoreItem");
 var canRemove = () => platform.checkTask("", "doRemoveStoreContent");
 var canEditSettings = () => platform.checkTask("", "doEditStoreSettings");
 var React = platform.React;
 var BASE = "/extensions/communitystore";
-var STORE_CSS = `
-/* Type/status pills: never wrap their text into tall ovals \u2014 tight card rows wrap
-   the whole pill to the next line instead. */
-.cs-store .tag { white-space: nowrap; }
-
-/* Confirmation overlay. Own class, NOT host Tailwind utilities: the host generates
-   utilities from ITS source scan, so a class no host file uses (e.g. inset-0) simply
-   does not exist in app.css \u2014 and this plugin's sources are never scanned. */
-.cs-overlay {
-    position: fixed;
-    top: 0; right: 0; bottom: 0; left: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 1000;
-}
-
-/* Update available: a calm green row tint + left bar (the pill carries the
-   detail; the row makes it scannable). Same mechanics as the revoked treatment. */
-.cs-store table.dt tbody tr.cs-update,
-.cs-store table.dt tbody tr.cs-update:hover {
-    background: color-mix(in srgb, var(--ok) 15%, var(--bg1)) !important;
-    box-shadow: inset 4px 0 0 var(--ok);
-}
-
-/* The update pill: green like its row (an accent-blue pill on a green row read
-   as two unrelated signals), bolder text, and a heavier arrow. */
-.cs-store .tag.cs-tag-update {
-    color: var(--ok);
-    border-color: color-mix(in srgb, var(--ok) 55%, transparent);
-    background: color-mix(in srgb, var(--ok) 12%, transparent);
-    font-weight: 700;
-}
-.cs-store .tag.cs-tag-update .cs-up {
-    font-size: 13px;
-    font-weight: 800;
-    line-height: 1;
-}
-
-/* Revoked packages: unmissable. Red-tinted row (beats the table hover), thick red
-   left bar, in light and dark themes. */
-table.dt tbody tr.cs-revoked,
-table.dt tbody tr.cs-revoked:hover {
-    background: color-mix(in srgb, var(--err) 16%, var(--bg1)) !important;
-    box-shadow: inset 4px 0 0 var(--err);
-}
-`;
 var DOCS_CSS = `
 .cs-docs { line-height: 1.55; overflow-wrap: break-word; }
 .cs-docs img { max-width: 100%; }
@@ -2244,57 +2276,99 @@ function setPref(key, value) {
   } catch (e) {
   }
 }
-function TypeTag({ type }) {
-  return /* @__PURE__ */ React.createElement("span", { className: "tag" }, TYPE_LABELS[type] || type);
+function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLabel, onSecondary, onCancel, busy, loading, error, documentation = false, inactive = false, closeLabel = "Close documentation" }) {
+  const dialog = React.useRef(null);
+  const titleId = React.useId();
+  React.useEffect(() => {
+    const previous = document.activeElement;
+    dialog.current?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
+  }, []);
+  const onKeyDown = (event) => {
+    if (event.key === "Escape" && !busy) {
+      event.stopPropagation();
+      onCancel();
+    }
+    if (event.key !== "Tab") return;
+    const nodes = [...dialog.current.querySelectorAll("button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary")];
+    const first = nodes[0], last = nodes[nodes.length - 1];
+    if (!first) {
+      event.preventDefault();
+      return;
+    }
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog.current)) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay", style: inactive ? { display: "none" } : void 0 }, /* @__PURE__ */ React.createElement("div", { className: `panel cs-dialog ${documentation ? "cs-documentation-dialog" : ""}`, role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, ref: dialog, tabIndex: -1, onKeyDown }, /* @__PURE__ */ React.createElement("div", { className: "panel-header", id: titleId }, title, documentation ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: onCancel, "aria-label": closeLabel }, "Close") : null), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, loading ? /* @__PURE__ */ React.createElement("p", { role: "status" }, "Loading libraries\u2026") : null, error ? /* @__PURE__ */ React.createElement("p", { role: "alert", className: "cs-notice error" }, error) : null, !documentation ? /* @__PURE__ */ React.createElement("div", { className: "cs-dialog-actions" }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => onCancel(), disabled: busy }, "Cancel"), secondaryLabel ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => onSecondary(), disabled: busy || loading }, secondaryLabel) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => onConfirm(), disabled: busy || loading }, busy ? "Working\u2026" : confirmLabel)) : null)));
 }
-function Badges({ entry }) {
-  return /* @__PURE__ */ React.createElement("span", { className: "flex gap-1 items-center flex-wrap" }, entry.installedVersion ? entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "tag cs-tag-update", title: `Update available: ${entry.version}` }, "Installed ", entry.installedVersion, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-up" }, "\u2191")) : /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Installed ", entry.installedVersion) : null, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null, !entry.compatible && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Incompatible") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("span", { className: "tag" }, "Deprecated") : null);
-}
-function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLabel, onSecondary, onCancel, busy }) {
-  return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "panel", style: { width: 460, maxWidth: "90vw" } }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, title), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4", style: { justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onCancel, disabled: busy }, "Cancel"), secondaryLabel ? /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: onSecondary, disabled: busy }, secondaryLabel) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: onConfirm, disabled: busy }, busy ? "Working\u2026" : confirmLabel)))));
-}
-function useStoreActions(refresh) {
+function useStoreActions(refresh, onComplete) {
   const [confirm, setConfirm] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  const inFlight = React.useRef(false);
+  const pickerRequest = React.useRef(0);
+  const [loadingLibraries, setLoadingLibraries] = React.useState(false);
+  const [actionError, setActionError] = React.useState(null);
+  const choose = (value) => {
+    pickerRequest.current++;
+    setLoadingLibraries(false);
+    setActionError(null);
+    setConfirm(value);
+  };
   const [libraries, setLibraries] = React.useState([]);
   const [libMode, setLibMode] = React.useState("new");
   const [newLib, setNewLib] = React.useState("");
   const [existingLib, setExistingLib] = React.useState("");
   const loadLibraryPicker = async (entry) => {
+    const request = ++pickerRequest.current;
+    setLoadingLibraries(true);
     setLibMode("new");
     setNewLib(entry.name || "Community Store");
     setExistingLib("");
     setLibraries([]);
     try {
-      setLibraries(normalizeLibraries(await apiGet("/codeTemplateLibraries")));
+      const result = normalizeLibraries(await apiGet("/codeTemplateLibraries"));
+      if (request === pickerRequest.current) setLibraries(result);
     } catch (e) {
-      setLibraries([]);
+      if (request === pickerRequest.current) setActionError("Could not load existing libraries. You can create a new library, or cancel and retry. " + errText(e));
+    } finally {
+      if (request === pickerRequest.current) setLoadingLibraries(false);
     }
   };
   const requestInstall = async (entry) => {
-    setConfirm({ entry, mode: "install" });
+    choose({ entry, mode: "install" });
     if (entry.type === "code-template" && !entry.installedVersion) await loadLibraryPicker(entry);
   };
   const requestCopy = async (entry) => {
-    setConfirm({ entry, mode: "copy" });
+    choose({ entry, mode: "copy" });
     if (entry.type === "code-template") await loadLibraryPicker(entry);
   };
   const requestUpdate = (entry) => {
     if (entry.type === "code-template" || entry.type === "code-template-library") {
-      setConfirm({ entry, mode: entry.modified ? "modified-choice" : "upgrade" });
+      choose({ entry, mode: entry.modified ? "modified-choice" : "upgrade" });
     } else requestInstall(entry);
   };
-  const requestRemove = (entry) => setConfirm({ entry, mode: "remove" });
-  const execute = async (modeOverride) => {
-    if (!confirm) return;
+  const requestRemove = (entry) => choose({ entry, mode: "remove" });
+  const execute = async (modeOverride, overwrite = false) => {
+    if (!confirm || inFlight.current || loadingLibraries) return;
     const entry = confirm.entry;
-    const mode = modeOverride || confirm.mode;
+    const mode = typeof modeOverride === "string" ? modeOverride : confirm.mode;
+    if (!["install", "upgrade", "copy", "remove"].includes(mode)) return;
     const content = isContentType(entry.type);
+    inFlight.current = true;
+    setActionError(null);
     setBusy(true);
     try {
       if (mode === "remove") {
         await apiPost(`${BASE}/_removeContent`, { id: entry.id });
         toast(`Removed ${entry.name} from this engine.`, "success");
+        onComplete?.({ entry, mode, restartRequired: false });
         setConfirm(null);
         await refresh(false);
         return;
@@ -2302,6 +2376,10 @@ function useStoreActions(refresh) {
       {
         const body = { id: entry.id, tag: entry.tag };
         if (mode === "upgrade" || mode === "copy") body.mode = mode;
+        if (mode === "upgrade") {
+          body.expectedContentHash = entry.expectedContentHash || "";
+          body.overwrite = overwrite;
+        }
         if (entry.type === "code-template" && (mode === "copy" || mode === "install" && !entry.installedVersion)) {
           if (libMode === "existing") {
             if (!existingLib) {
@@ -2314,7 +2392,8 @@ function useStoreActions(refresh) {
             body.newLibrary = (newLib || "").trim() || "Community Store";
           }
         }
-        await apiPost(`${BASE}/_install`, body);
+        const result = await apiPost(`${BASE}/_install`, body);
+        onComplete?.({ entry, mode, restartRequired: !!result.restartRequired });
         toast(mode === "upgrade" ? entry.updateAvailable ? `Upgraded ${entry.name} to v${entry.version}.` : `Re-imported ${entry.name}.` : mode === "copy" ? `Imported ${entry.name} as a copy.` : content ? `Imported ${entry.name}. It's available now.` : `Installed ${entry.name} ${entry.version}. Restart the engine to activate it.`, "success");
         if (!content) {
           try {
@@ -2326,8 +2405,10 @@ function useStoreActions(refresh) {
       setConfirm(null);
       await refresh(false);
     } catch (e) {
+      setActionError(errText(e));
       toast(errText(e), "error");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -2340,8 +2421,10 @@ function useStoreActions(refresh) {
         title: `Remove ${entry.name}?`,
         confirmLabel: "Remove",
         busy,
-        onCancel: () => setConfirm(null),
-        onConfirm: execute
+        loading: loadingLibraries,
+        error: actionError,
+        onCancel: () => choose(null),
+        onConfirm: () => execute("remove")
       },
       /* @__PURE__ */ React.createElement("div", null, entry.type === "code-template-library" ? /* @__PURE__ */ React.createElement("p", null, "Deletes the library ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " and ", /* @__PURE__ */ React.createElement("strong", null, "all code templates it currently contains"), " \u2014 including any you added to it after installing.") : /* @__PURE__ */ React.createElement("p", null, "Deletes the code template ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from this engine, including its library membership. The library itself is kept", entry.revoked ? "." : ", and the package stays in Browse if you want to re-import it later."))
     );
@@ -2356,11 +2439,13 @@ function useStoreActions(refresh) {
         confirmLabel: "Install as new copy",
         secondaryLabel: "Overwrite",
         busy,
-        onCancel: () => setConfirm(null),
-        onSecondary: () => execute("upgrade"),
+        loading: loadingLibraries,
+        error: actionError,
+        onCancel: () => choose(null),
+        onSecondary: () => execute("upgrade", true),
         onConfirm: () => requestCopy(entry)
       },
-      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, untracked ? `This ${noun} was installed before change tracking \u2014 the store can't tell whether you've modified it.` : `You've modified this ${noun} since installing it.`), /* @__PURE__ */ React.createElement("p", null, /* @__PURE__ */ React.createElement("strong", null, "Overwrite"), " replaces ", untracked ? "whatever is there" : "your changes", " with version ", entry.version, ".", " ", /* @__PURE__ */ React.createElement("strong", null, "Install as new copy"), " keeps ", untracked ? "what's installed" : "yours", " and imports version ", entry.version, " as a separate ", noun, entry.type === "code-template" ? " (you'll choose a library for it)" : "", "."))
+      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, untracked ? `This ${noun} was installed using an older change-tracking format \u2014 the store can't tell whether you've modified it.` : `You've modified this ${noun} since installing it.`), /* @__PURE__ */ React.createElement("p", null, /* @__PURE__ */ React.createElement("strong", null, "Overwrite"), " replaces ", untracked ? "whatever is there" : "your changes", " with version ", entry.version, ".", " ", /* @__PURE__ */ React.createElement("strong", null, "Install as new copy"), " keeps ", untracked ? "what's installed" : "yours", " and imports version ", entry.version, " as a separate ", noun, entry.type === "code-template" ? " (you'll choose a library for it)" : "", "."))
     );
   } else if (confirm && confirm.mode === "upgrade") {
     const entry = confirm.entry;
@@ -2371,7 +2456,9 @@ function useStoreActions(refresh) {
         title: reimport ? `Re-import ${entry.name}?` : `Update ${entry.name} to v${entry.version}?`,
         confirmLabel: reimport ? "Re-import" : `Update to v${entry.version}`,
         busy,
-        onCancel: () => setConfirm(null),
+        loading: loadingLibraries,
+        error: actionError,
+        onCancel: () => choose(null),
         onConfirm: () => execute()
       },
       /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Replaces the installed ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " in place with version ", entry.version, " from ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, ").", entry.type === "code-template" ? " Its library membership is kept, and it" : " It", " takes effect immediately \u2014 no engine restart."))
@@ -2387,7 +2474,9 @@ function useStoreActions(refresh) {
         title: copy ? `Install ${entry.name} as a copy?` : `${content ? entry.updateAvailable ? "Update" : "Import" : "Install"} ${entry.name}?`,
         confirmLabel: copy ? "Install as copy" : content ? entry.updateAvailable ? `Update to ${entry.version}` : "Import" : `Install ${entry.version}`,
         busy,
-        onCancel: () => setConfirm(null),
+        loading: loadingLibraries,
+        error: actionError,
+        onCancel: () => choose(null),
         onConfirm: () => execute()
       },
       /* @__PURE__ */ React.createElement("div", null, copy ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " version ", entry.version, " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, ") as a new copy with a fresh id", entry.installedVersion ? " \u2014 what you have installed is left untouched" : "", ". The copy is yours: the store does not track or update it.") : content ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, "). It takes effect immediately \u2014 no engine restart.") : /* @__PURE__ */ React.createElement("p", null, "This installs ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " release", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.tag), " into the engine's extensions directory after sha256 verification."), wantsLibrary ? /* @__PURE__ */ React.createElement("div", { className: "mt-3" }, /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mb-1" }, "Add to library:"), /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2 mb-1", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "radio", name: "cs-lib", checked: libMode === "new", onChange: () => setLibMode("new") }), "Create new library:", /* @__PURE__ */ React.createElement(
@@ -2417,7 +2506,7 @@ function useStoreActions(refresh) {
       ))) : null, /* @__PURE__ */ React.createElement("p", { className: "hint mt-2" }, "Community content is published by third parties and is not vetted by the Open Integration Engine project. Installing runs its code in the engine. Install only from publishers you trust."))
     );
   }
-  return { requestInstall, requestUpdate, requestCopy, requestRemove, overlay };
+  return { requestInstall, requestUpdate, requestCopy, requestRemove, overlay, busy };
 }
 function DocsPanel({ entry }) {
   const [docs, setDocs] = React.useState(null);
@@ -2451,105 +2540,97 @@ function DocsPanel({ entry }) {
   }, [docs]);
   return /* @__PURE__ */ React.createElement("div", { className: "panel mt-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header flex items-center gap-2" }, "Documentation", docs && docs.found ? /* @__PURE__ */ React.createElement("span", { className: "mono text-text-dim", style: { fontSize: "0.85em" } }, docs.path, " @ ", docs.tag) : null), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("style", null, DOCS_CSS), error ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Could not load documentation: ", error) : null, !error && !docs ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Loading documentation\u2026") : null, docs && !docs.found ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "This publisher provides no store documentation. Publishers can add a store.md (or README.md) to their repository; it renders here, pinned to the release tag.") : null, html2 ? /* @__PURE__ */ React.createElement("div", { className: "cs-docs", dangerouslySetInnerHTML: { __html: html2 } }) : null, docs && docs.truncated ? /* @__PURE__ */ React.createElement("div", { className: "hint mt-2" }, "Documentation was truncated. The full file is available in the repository.") : null));
 }
-function DetailView({ entry, onBack, actions }) {
-  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: onBack }, "\u2190 Back"), /* @__PURE__ */ React.createElement("h2", { className: "m-0" }, entry.name), /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type }), /* @__PURE__ */ React.createElement(Badges, { entry })), entry.revoked ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-err font-semibold" }, entry.revokedReason === "blocked" ? "Blocked by its catalog." : "Removed from its source."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, entry.description))) : null, entry.deprecated ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-accent" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".")) : null, !entry.compatible ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, "No release of this extension is compatible with this engine version", entry.minEngineVersion ? ` (requires engine ${entry.minEngineVersion}${entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : " or later"})` : "", ".")) : null, /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Details"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("p", null, entry.description || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "No description provided.")), /* @__PURE__ */ React.createElement("table", { className: "dt mt-3" }, /* @__PURE__ */ React.createElement("tbody", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Repository"), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { href: entry.repoUrl || `https://github.com/${entry.repo}`, target: "_blank", rel: "noreferrer" }, entry.repo))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Offered version"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.version, " (", entry.tag, ")", entry.offeredIsLatest ? "" : ` \u2014 newest compatible; latest release is ${entry.latestTag}`)), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Engine compatibility"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.minEngineVersion || "unspecified", entry.maxEngineVersion ? ` to ${entry.maxEngineVersion}` : "+")), entry.installedVersion ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Installed version"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion)) : null, entry.modified ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Local changes"), /* @__PURE__ */ React.createElement("td", null, entry.driftTracked === false ? "Unknown \u2014 installed before change tracking" : "Modified since install")) : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Snapshot"), /* @__PURE__ */ React.createElement("td", { className: "text-accent" }, "Newer snapshot available: v", entry.newerSnapshot)) : null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "License"), /* @__PURE__ */ React.createElement("td", null, entry.license || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "unspecified"))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Authors"), /* @__PURE__ */ React.createElement("td", null, (entry.authors || []).join(", ") || /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "unspecified"))), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Published"), /* @__PURE__ */ React.createElement("td", null, entry.publishedAt || "")), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Source"), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.source)), /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "Restart required"), /* @__PURE__ */ React.createElement("td", null, entry.restartRequired ? "Yes" : "No")))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 mt-4" }, canInstall() && entry.installable && entry.compatible && entry.type === "channel" && entry.installedVersion ? (
-    // Channels are a snapshot gallery: no in-place update, re-import, or
-    // remove, ever. A present channel always installs again as an
-    // untracked copy under a fresh id (matching the Swing panel exactly);
-    // the "newer snapshot" line above says when the copy would be newer.
-    /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestCopy(entry) }, "Install as copy")
-  ) : canInstall() && entry.installable && entry.compatible && (isContentType(entry.type) || !entry.installedVersion || entry.updateAvailable) ? /* @__PURE__ */ React.createElement(
+var TYPE_ICONS = {
+  "connector": "M8 2v6M16 2v6M5 8h14v4a7 7 0 0 1-14 0V8zM12 19v3",
+  "plugin": "M8 2v6M16 2v6M5 8h14v4a7 7 0 0 1-14 0V8zM12 19v3",
+  "datatype": "M8 2v6M16 2v6M5 8h14v4a7 7 0 0 1-14 0V8zM12 19v3",
+  "channel": "M2 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M16 5a3 3 0 1 0 6 0a3 3 0 1 0-6 0M16 19a3 3 0 1 0 6 0a3 3 0 1 0-6 0M7.7 10.7l8.6-4.4M7.7 13.3l8.6 4.4",
+  "code-template": "M8 7l-5 5 5 5M16 7l5 5-5 5M13 4l-2 16",
+  "code-template-library": "M8 7l-5 5 5 5M16 7l5 5-5 5M13 4l-2 16"
+};
+function PackageIcon({ type }) {
+  return /* @__PURE__ */ React.createElement("span", { className: "cs-icon", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.7", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: TYPE_ICONS[type] || TYPE_ICONS.plugin })));
+}
+function PackageStatus({ entry }) {
+  if (entry.revoked) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill error" }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source");
+  if (entry.stagedVersion) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Restart pending");
+  if (entry.modified) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, entry.driftTracked === false ? "Changes unknown" : "Locally modified");
+  if (entry.updateAvailable) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill update" }, "Update available");
+  if (!entry.compatible) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Incompatible");
+  if (entry.deprecated) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Deprecated");
+  if (entry.installedVersion) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill ok" }, "Installed");
+  return /* @__PURE__ */ React.createElement("span", { className: "cs-pill" }, "Available to ", isContentType(entry.type) ? "import" : "install");
+}
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(value);
+    return ["https:", "http:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+function ExternalLink({ href, children }) {
+  const safe = safeExternalUrl(href);
+  return safe ? /* @__PURE__ */ React.createElement("a", { href: safe, target: "_blank", rel: "noopener noreferrer" }, children) : null;
+}
+var DOWNLOAD_NOTE = "Downloads of matching installer ZIPs across retained GitHub releases, including prereleases. Repeat and automated downloads count; this is not an installation or user count. Renamed asset families and deleted releases are excluded.";
+function DownloadCount({ entry }) {
+  const stats = entry.downloads;
+  return /* @__PURE__ */ React.createElement("span", { title: DOWNLOAD_NOTE }, stats?.status === "available" && Number.isSafeInteger(stats.count) && stats.count >= 0 ? stats.count.toLocaleString() : "\u2014");
+}
+function DetailView({ entry, actions }) {
+  const [docsOpen, setDocsOpen] = React.useState(true);
+  React.useEffect(() => setDocsOpen(true), [entry?.id]);
+  if (!entry) return /* @__PURE__ */ React.createElement("aside", { className: "cs-detail" }, /* @__PURE__ */ React.createElement("h2", null, "Package details"), /* @__PURE__ */ React.createElement("p", { className: "cs-detail-description" }, "Select a package to review its compatibility, source, and installation options."));
+  const content = isContentType(entry.type);
+  const channelCopy = entry.type === "channel" && entry.installedVersion;
+  const update = entry.updateAvailable || content && entry.installedVersion && !channelCopy;
+  const actionable = canInstall() && entry.installable && entry.compatible && !entry.revoked && !entry.stagedVersion && (content || !entry.installedVersion || entry.updateAvailable);
+  const label = channelCopy ? "Import as copy" : update ? entry.updateAvailable ? `Review update to ${entry.version}` : "Review re-import" : content ? "Review import" : "Review installation";
+  return /* @__PURE__ */ React.createElement("aside", { className: "cs-detail", "aria-label": "Selected package" }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("h2", null, entry.name), /* @__PURE__ */ React.createElement("div", { className: "cs-meta" }, TYPE_LABELS[entry.type] || entry.type, entry.authors?.length ? ` \xB7 by ${entry.authors.join(", ")}` : ""), /* @__PURE__ */ React.createElement("p", { className: "cs-detail-description" }, entry.description || "No description provided."), /* @__PURE__ */ React.createElement(PackageStatus, { entry }), /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, DOWNLOAD_NOTE, " ", entry.downloads?.status !== "available" ? "Count unavailable for this package." : ""), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Offered version"), /* @__PURE__ */ React.createElement("dd", null, entry.revoked ? "Unavailable" : entry.version)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Installed version"), /* @__PURE__ */ React.createElement("dd", null, entry.installedVersion || "Not installed")), entry.stagedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Staged version"), /* @__PURE__ */ React.createElement("dd", null, entry.stagedVersion)) : null, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Downloads \xB7 all versions"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry }))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Engine compatibility"), /* @__PURE__ */ React.createElement("dd", null, entry.minEngineVersion || "Unspecified", entry.maxEngineVersion ? ` \u2013 ${entry.maxEngineVersion}` : entry.minEngineVersion ? "+" : ""))), entry.revoked ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice error" }, "This package is no longer offered by its source. Review whether you still trust it.") : entry.stagedVersion ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Version ", entry.stagedVersion, " is staged. Restart the engine to activate it.") : !entry.compatible ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "No compatible version is available for this engine.") : /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, content ? "Imported content is available immediately. No restart needed." : "Engine restart required after installation."), entry.modified ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, entry.driftTracked === false ? "Local changes are unknown with the previous tracking format." : "Local edits detected.", " Review before replacing this content. You can keep your changes by importing a copy.") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".") : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, "Newer snapshot available: ", entry.newerSnapshot, ". Import as a copy to keep the installed channel.") : null, actionable ? /* @__PURE__ */ React.createElement(
     "button",
     {
-      className: "btn btn-primary",
-      onClick: () => entry.updateAvailable || isContentType(entry.type) && entry.installedVersion ? actions.requestUpdate(entry) : actions.requestInstall(entry)
+      className: "btn btn-primary cs-primary-action",
+      disabled: actions.busy,
+      onClick: () => channelCopy ? actions.requestCopy(entry) : update ? actions.requestUpdate(entry) : actions.requestInstall(entry)
     },
-    isContentType(entry.type) ? entry.updateAvailable ? `Update to ${entry.version}` : entry.installedVersion ? "Re-import" : "Import" : entry.installedVersion ? `Update to ${entry.version}` : `Install ${entry.version}`
-  ) : null, canRemove() && isContentType(entry.type) && entry.type !== "channel" && entry.installedVersion ? (
-    // No Remove for channels — the store never deletes a channel;
-    // that happens in the Channels view (server rejects it too).
-    /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove")
-  ) : null, !entry.installable ? /* @__PURE__ */ React.createElement("span", { className: "hint" }, "This type is not installable through the store yet.") : null, entry.documentation ? /* @__PURE__ */ React.createElement("a", { className: "btn", href: entry.documentation, target: "_blank", rel: "noreferrer" }, "Documentation") : null, entry.releaseUrl ? /* @__PURE__ */ React.createElement("a", { className: "btn", href: entry.releaseUrl, target: "_blank", rel: "noreferrer" }, "Release notes") : null))), /* @__PURE__ */ React.createElement(DocsPanel, { entry }));
+    label
+  ) : null, /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, "Community published. A checksum verifies artifact integrity, not publisher identity."), /* @__PURE__ */ React.createElement("details", { className: "cs-package-info" }, /* @__PURE__ */ React.createElement("summary", null, "Package information"), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "License"), /* @__PURE__ */ React.createElement("dd", null, entry.license || "Unspecified")), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Repository"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.repoUrl || `https://github.com/${entry.repo}` }, entry.repo || "Repository"))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Source"), /* @__PURE__ */ React.createElement("dd", null, entry.source)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Artifact integrity"), /* @__PURE__ */ React.createElement("dd", null, entry.sha256 || entry.checksumUrl ? "SHA-256 on install" : "No published checksum")), entry.publishedAt ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Published"), /* @__PURE__ */ React.createElement("dd", null, new Date(entry.publishedAt).toLocaleDateString())) : null, !entry.offeredIsLatest && entry.latestTag ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Latest release"), /* @__PURE__ */ React.createElement("dd", null, entry.latestTag, " (offering the compatible version)")) : null)), /* @__PURE__ */ React.createElement("div", { className: "cs-detail-links" }, /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.documentation }, "Documentation \u2197"), /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.releaseUrl }, "Release notes \u2197")), !entry.revoked ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { className: "btn cs-docs-toggle", "aria-expanded": docsOpen, onClick: () => setDocsOpen(!docsOpen) }, docsOpen ? "Hide publisher documentation" : "Read publisher documentation"), docsOpen ? /* @__PURE__ */ React.createElement(DocsPanel, { entry }) : null) : null, entry.installedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-facts" }, content && entry.type !== "channel" && canRemove() ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", disabled: actions.busy, onClick: () => actions.requestRemove(entry) }, "Remove from engine\u2026") : /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, entry.type === "channel" ? "Manage or delete this channel in Channels." : "Manage or uninstall this package in Extensions.")) : null);
 }
-function EntryCard({ entry, onSelect }) {
-  return /* @__PURE__ */ React.createElement("div", { className: "panel", style: { cursor: "pointer" }, onClick: () => onSelect(entry) }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("strong", null, entry.name), /* @__PURE__ */ React.createElement("span", { className: "mono text-text-dim" }, entry.version), /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mt-1", style: { minHeight: "2.5em" } }, entry.description ? entry.description.length > 140 ? entry.description.slice(0, 140) + "\u2026" : entry.description : ""), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2" }, /* @__PURE__ */ React.createElement("span", { className: "mono text-text-dim text-[12px]" }, entry.repo)), /* @__PURE__ */ React.createElement("div", { className: "mt-2" }, /* @__PURE__ */ React.createElement(Badges, { entry }))));
+function statusGroup(e) {
+  if (e.stagedVersion) return "Restart pending";
+  if (e.revoked) return "Needs attention";
+  if (e.updateAvailable) return "Updates available";
+  return e.installedVersion ? "Installed" : "Available";
 }
-function CardsGrid({ entries, onSelect }) {
-  return /* @__PURE__ */ React.createElement("div", { className: "grid gap-3", style: { gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" } }, entries.map((entry) => /* @__PURE__ */ React.createElement(EntryCard, { key: entry.id, entry, onSelect })));
-}
-function EntryRow({ entry, onSelect }) {
-  return /* @__PURE__ */ React.createElement(
-    "tr",
-    {
-      style: { cursor: "pointer" },
-      className: entry.updateAvailable ? "cs-update" : void 0,
-      onClick: () => onSelect(entry)
-    },
-    /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { className: "text-accent" }, entry.name)),
-    /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })),
-    /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.version),
-    /* @__PURE__ */ React.createElement("td", { className: "mono text-text-dim" }, entry.repo),
-    /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(Badges, { entry }))
-  );
-}
-var TABLE_COLS = /* @__PURE__ */ React.createElement("colgroup", null, /* @__PURE__ */ React.createElement("col", null), /* @__PURE__ */ React.createElement("col", { style: { width: 170 } }), /* @__PURE__ */ React.createElement("col", { style: { width: 110 } }), /* @__PURE__ */ React.createElement("col", { style: { width: 320 } }), /* @__PURE__ */ React.createElement("col", { style: { width: 170 } }));
-var TABLE_HEAD = /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Name"), /* @__PURE__ */ React.createElement("th", null, "Type"), /* @__PURE__ */ React.createElement("th", null, "Version"), /* @__PURE__ */ React.createElement("th", null, "Repository"), /* @__PURE__ */ React.createElement("th", null, "Status")));
-function EntryTable({ entries, onSelect }) {
-  return /* @__PURE__ */ React.createElement("table", { className: "dt" }, TABLE_COLS, TABLE_HEAD, /* @__PURE__ */ React.createElement("tbody", null, entries.map((entry) => /* @__PURE__ */ React.createElement(EntryRow, { key: entry.id, entry, onSelect }))));
-}
-function GroupedTable({ groups, onSelect }) {
-  return /* @__PURE__ */ React.createElement("table", { className: "dt" }, TABLE_COLS, TABLE_HEAD, groups.map(({ type, entries }) => /* @__PURE__ */ React.createElement("tbody", { key: type }, /* @__PURE__ */ React.createElement("tr", { className: "group-row" }, /* @__PURE__ */ React.createElement("td", { colSpan: 5 }, /* @__PURE__ */ React.createElement("span", { className: "font-semibold" }, TYPE_LABELS[type] || type), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-faint text-[12px]" }, entries.length))), entries.map((entry) => /* @__PURE__ */ React.createElement(EntryRow, { key: entry.id, entry, onSelect })))));
-}
-function BrowseView({ catalog, onSelect }) {
+var STATUS_ORDER = ["Restart pending", "Needs attention", "Updates available", "Installed", "Available"];
+function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
   const [search, setSearch] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
-  const [viewMode, setViewMode] = React.useState(() => getPref("view", "cards"));
-  const [groupByType, setGroupByType] = React.useState(() => getPref("group", "0") === "1");
-  const setView = (v) => {
-    setViewMode(v);
-    setPref("view", v);
-  };
-  const setGroup = (g) => {
-    setGroupByType(g);
-    setPref("group", g ? "1" : "0");
-  };
-  const visible = (catalog.entries || []).filter(showsInWebUi);
-  const entries = visible.filter((entry) => {
-    if (entry.revoked) return false;
-    if (typeFilter && entry.type !== typeFilter) return false;
-    if (!search) return true;
-    const haystack = `${entry.name} ${entry.description} ${entry.repo} ${(entry.keywords || []).join(" ")}`.toLowerCase();
-    return haystack.includes(search.toLowerCase());
-  });
-  const types = [...new Set(visible.map((e) => e.type))].sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b));
-  const render = (list2) => viewMode === "table" ? /* @__PURE__ */ React.createElement(EntryTable, { entries: list2, onSelect }) : /* @__PURE__ */ React.createElement(CardsGrid, { entries: list2, onSelect });
-  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center mb-3 flex-wrap" }, /* @__PURE__ */ React.createElement(
-    "input",
-    {
-      className: "field",
-      style: { maxWidth: 320 },
-      placeholder: "Search name, description, keywords\u2026",
-      value: search,
-      onChange: (e) => setSearch(e.target.value)
-    }
-  ), /* @__PURE__ */ React.createElement("select", { className: "field", style: { maxWidth: 200 }, value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All types"), types.map((t) => /* @__PURE__ */ React.createElement("option", { key: t, value: t }, TYPE_LABELS[t] || t))), /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, entries.length, " of ", visible.length, " item(s)"), /* @__PURE__ */ React.createElement("div", { className: "ml-auto flex items-center gap-3" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-1.5 text-text-dim", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: groupByType, onChange: (e) => setGroup(e.target.checked) }), "Group by type"), /* @__PURE__ */ React.createElement("div", { className: "flex" }, /* @__PURE__ */ React.createElement("button", { className: `btn btn-sm ${viewMode === "cards" ? "btn-primary" : ""}`, onClick: () => setView("cards") }, "Cards"), /* @__PURE__ */ React.createElement("button", { className: `btn btn-sm ${viewMode === "table" ? "btn-primary" : ""}`, onClick: () => setView("table") }, "Table")))), entries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-text-dim" }, "No items match. Sources may still be syncing, or none are configured; check Settings.")) : groupByType ? (() => {
-    const groups = types.filter((t) => entries.some((e) => e.type === t)).map((t) => ({ type: t, entries: entries.filter((e) => e.type === t) }));
-    if (viewMode === "table") {
-      return /* @__PURE__ */ React.createElement(GroupedTable, { groups, onSelect });
-    }
-    return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4" }, groups.map(({ type, entries: group }) => /* @__PURE__ */ React.createElement("div", { key: type }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 py-1.5 border-b border-line mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "font-semibold" }, TYPE_LABELS[type] || type), /* @__PURE__ */ React.createElement("span", { className: "text-text-faint text-[12px]" }, group.length)), /* @__PURE__ */ React.createElement(CardsGrid, { entries: group, onSelect }))));
-  })() : render(entries));
-}
-function InstalledView({ catalog, onSelect, actions }) {
-  const installed = (catalog.entries || []).filter((e) => e.installedVersion && showsInWebUi(e));
-  const revoked = installed.filter((e) => e.revoked);
-  if (installed.length === 0) {
-    return /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body text-text-dim" }, "No store-tracked extensions are installed. Extensions installed manually appear here once their repository is listed in a configured source and the ids match."));
+  const [groupBy, setGroupBy] = React.useState(() => getPref("groupBy", "status"));
+  const [sortBy, setSortBy] = React.useState(() => getPref("sortBy", "name"));
+  const [collapsed, setCollapsed] = React.useState({});
+  const visible = (catalog.entries || []).filter((e) => e.installedVersion || e.stagedVersion || showsInWebUi(e));
+  const entries = visible.filter((e) => (tab === "installed" ? e.installedVersion || e.stagedVersion : tab === "updates" ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked) && (!typeFilter || e.type === typeFilter) && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(" ")}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => (sortBy === "type" ? typeRank(a.type) - typeRank(b.type) : sortBy === "status" ? STATUS_ORDER.indexOf(statusGroup(a)) - STATUS_ORDER.indexOf(statusGroup(b)) : 0) || a.name.localeCompare(b.name));
+  const types = [...new Set(visible.map((e) => e.type))].sort((a, b) => typeRank(a) - typeRank(b));
+  const groups = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    const key = groupBy === "type" ? entry.type : groupBy === "status" ? statusGroup(entry) : "All packages";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
   }
-  return /* @__PURE__ */ React.createElement("div", null, revoked.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-err" }, revoked.length === 1 ? "An installed package is" : `${revoked.length} installed packages are`, " no longer offered by ", revoked.length === 1 ? "its" : "their", " source."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "Removed or blocked packages keep running on this engine until you act \u2014 review the flagged rows below and uninstall anything you no longer trust from the Extensions page."))) : null, /* @__PURE__ */ React.createElement("table", { className: "dt" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Name"), /* @__PURE__ */ React.createElement("th", null, "Type"), /* @__PURE__ */ React.createElement("th", null, "Installed"), /* @__PURE__ */ React.createElement("th", null, "Available"), /* @__PURE__ */ React.createElement("th", null, "Repository"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, installed.map((entry) => (
-    // Revoked rows get an unmissable red treatment: tinted row + badge.
-    /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: entry.revoked ? "cs-revoked" : entry.updateAvailable ? "cs-update" : void 0 }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("a", { onClick: () => onSelect(entry), style: { cursor: "pointer" } }, entry.name), entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "tag text-err", style: { marginLeft: 8 }, title: entry.description }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source") : null), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(TypeTag, { type: entry.type })), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.installedVersion), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "text-err" }, "\u2014") : entry.updateAvailable ? /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, entry.version) : entry.version), /* @__PURE__ */ React.createElement("td", { className: "mono" }, entry.repo), /* @__PURE__ */ React.createElement("td", { className: "flex gap-1 items-center" }, canInstall() && entry.updateAvailable ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => actions.requestUpdate(entry) }, "Update") : null, isContentType(entry.type) && entry.type !== "channel" ? canRemove() && /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => actions.requestRemove(entry) }, "Remove") : entry.type === "channel" ? /* @__PURE__ */ React.createElement("span", { className: "hint" }, "Delete in Channels view") : /* @__PURE__ */ React.createElement("span", { className: "hint" }, "Manage in Extensions")))
-  )))));
+  const orderedGroups = [...groups].sort(([a], [b]) => groupBy === "type" ? typeRank(a) - typeRank(b) : groupBy === "status" ? STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b) : 0);
+  const selected = visible.find((e) => e.id === selectedId);
+  return /* @__PURE__ */ React.createElement("div", { className: "cs-catalog" }, /* @__PURE__ */ React.createElement("div", { className: "cs-toolbar" }, /* @__PURE__ */ React.createElement("label", { className: "cs-search" }, /* @__PURE__ */ React.createElement("input", { className: "field", "aria-label": "Search packages", placeholder: "Search community packages\u2026", value: search, onChange: (e) => setSearch(e.target.value) })), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Package type", value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All package types"), types.map((type) => /* @__PURE__ */ React.createElement("option", { key: type, value: type }, TYPE_LABELS[type] || type))), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Group packages", value: groupBy, onChange: (e) => {
+    setGroupBy(e.target.value);
+    setPref("groupBy", e.target.value);
+  } }, /* @__PURE__ */ React.createElement("option", { value: "status" }, "Group by status"), /* @__PURE__ */ React.createElement("option", { value: "type" }, "Group by type"), /* @__PURE__ */ React.createElement("option", { value: "none" }, "No grouping")), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Sort packages", value: sortBy, onChange: (e) => {
+    setSortBy(e.target.value);
+    setPref("sortBy", e.target.value);
+  } }, /* @__PURE__ */ React.createElement("option", { value: "name" }, "Sort by name"), /* @__PURE__ */ React.createElement("option", { value: "type" }, "Sort by type"), /* @__PURE__ */ React.createElement("option", { value: "status" }, "Sort by status")), /* @__PURE__ */ React.createElement("span", { className: "cs-result-count", role: "status" }, entries.length, " package", entries.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement("div", { className: "cs-workspace", tabIndex: 0, "aria-label": "Package list" }, /* @__PURE__ */ React.createElement("table", { className: "cs-table" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Package"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Type"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Installed"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Available"), /* @__PURE__ */ React.createElement("th", { scope: "col", title: DOWNLOAD_NOTE }, "Downloads"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Status"))), orderedGroups.map(([key, items]) => /* @__PURE__ */ React.createElement("tbody", { key }, groupBy !== "none" ? /* @__PURE__ */ React.createElement("tr", { className: "cs-group" }, /* @__PURE__ */ React.createElement("th", { colSpan: 6, scope: "rowgroup" }, /* @__PURE__ */ React.createElement("button", { "aria-expanded": !collapsed[groupBy + key], onClick: () => setCollapsed((old) => ({ ...old, [groupBy + key]: !old[groupBy + key] })) }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, collapsed[groupBy + key] ? "\u25B8" : "\u25BE"), " ", groupBy === "type" ? TYPE_LABELS[key] || key : key, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, items.length)))) : null, (groupBy === "none" || !collapsed[groupBy + key]) && items.map((entry) => /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: "cs-package-row", onClick: () => onSelect(entry.id) }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("button", { className: "cs-package", "aria-haspopup": "dialog", onClick: (e) => {
+    e.stopPropagation();
+    onSelect(entry.id);
+  } }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("span", { className: "cs-name" }, entry.name), /* @__PURE__ */ React.createElement("span", { className: "cs-description" }, entry.description)))), /* @__PURE__ */ React.createElement("td", null, TYPE_LABELS[entry.type] || entry.type), /* @__PURE__ */ React.createElement("td", null, entry.installedVersion || "\u2014"), /* @__PURE__ */ React.createElement("td", null, entry.revoked ? "\u2014" : entry.version), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry })), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(PackageStatus, { entry }))))))), !entries.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty" }, search || typeFilter ? "No matches. Try another search or package type." : tab === "updates" ? "No updates available in the current catalog." : tab === "installed" ? "No store packages are installed on this engine." : "No packages available. Check your sources and sync status in Settings.") : null), selected ? /* @__PURE__ */ React.createElement(ConfirmOverlay, { documentation: true, closeLabel: "Close package details", inactive: !!actions.overlay, title: selected.name, onCancel: () => onSelect(null) }, /* @__PURE__ */ React.createElement(DetailView, { key: selected.id, entry: selected, actions })) : null);
 }
 function SettingsView({ catalog, onSaved }) {
   const [settings, setSettings] = React.useState(null);
@@ -2644,30 +2725,62 @@ function CommunityStoreView() {
   const [catalog, setCatalog] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
-  const [selected, setSelected] = React.useState(null);
+  const [selectedId, setSelectedId] = React.useState(null);
+  const [completion, setCompletion] = React.useState(null);
+  const [staged, setStaged] = React.useState({});
+  const [downloads, setDownloads] = React.useState({});
+  React.useEffect(() => {
+    let cancelled = false;
+    setDownloads({});
+    async function load() {
+      for (const entry of catalog?.entries || []) {
+        if (cancelled) break;
+        try {
+          const stats = await apiGet(`${BASE}/catalog/${encodeURIComponent(entry.id)}/downloads`);
+          if (!cancelled) setDownloads((old) => ({ ...old, [entry.id]: stats }));
+        } catch {
+        }
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [catalog]);
+  const request = React.useRef(0);
   const refresh = async (force) => {
+    const current = ++request.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet(`${BASE}/catalog?refresh=${force ? "true" : "false"}`);
-      setCatalog(data);
-      if (selected) {
-        const updated = (data.entries || []).find((e) => e.id === selected.id);
-        setSelected(updated || null);
-      }
+      const data2 = await apiGet(`${BASE}/catalog?refresh=${force ? "true" : "false"}`);
+      if (request.current !== current) return;
+      setCatalog(data2);
+      setStaged((previous) => Object.fromEntries(Object.entries(previous).filter(([id, version]) => !(data2.entries || []).some((e) => e.id === id && e.installedVersion === version))));
     } catch (e) {
-      setError(errText(e));
+      if (request.current === current) setError(errText(e));
     } finally {
-      setLoading(false);
+      if (request.current === current) setLoading(false);
     }
   };
   React.useEffect(() => {
     refresh(false);
+    return () => {
+      request.current++;
+    };
   }, []);
-  const actions = useStoreActions(refresh);
-  const updates = catalog ? (catalog.entries || []).filter((e) => e.updateAvailable && showsInWebUi(e)).length : 0;
-  const banners = /* @__PURE__ */ React.createElement(React.Fragment, null, error ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("span", { className: "text-accent" }, "Could not load the store catalog."), " ", /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, error), /* @__PURE__ */ React.createElement("div", { className: "hint mt-1" }, "The Community Store requires the manage-extensions permission, the same permission used to install extensions manually."))) : null, catalog && (catalog.errors || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "panel mb-3" }, /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mb-1" }, "Some sources failed to sync:"), catalog.errors.map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "mono text-[12px]" }, e.source, ": ", e.message)))) : null);
-  return /* @__PURE__ */ React.createElement("div", { className: "view cs-store flex flex-col flex-1 min-h-0" }, /* @__PURE__ */ React.createElement("style", null, STORE_CSS), actions.overlay, selected ? /* @__PURE__ */ React.createElement("div", { className: "view-body" }, banners, /* @__PURE__ */ React.createElement(DetailView, { entry: selected, onBack: () => setSelected(null), actions })) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tabs flex-none" }, /* @__PURE__ */ React.createElement("button", { className: `tab ${tab === "browse" ? "active" : ""}`, onClick: () => setTab("browse") }, "Browse"), /* @__PURE__ */ React.createElement("button", { className: `tab ${tab === "installed" ? "active" : ""}`, onClick: () => setTab("installed") }, "Installed", updates > 0 ? ` (${updates})` : ""), canEditSettings() && /* @__PURE__ */ React.createElement("button", { className: `tab ${tab === "settings" ? "active" : ""}`, onClick: () => setTab("settings") }, "Settings"), /* @__PURE__ */ React.createElement("div", { className: "ml-auto flex items-center gap-2 pr-2" }, catalog && catalog.engineVersion ? /* @__PURE__ */ React.createElement("span", { className: "text-text-dim text-[12px]" }, "Engine ", catalog.engineVersion) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => refresh(true), disabled: loading }, loading ? "Syncing\u2026" : "Sync now"))), /* @__PURE__ */ React.createElement("div", { className: "view-body" }, banners, tab === "browse" && catalog ? /* @__PURE__ */ React.createElement(BrowseView, { catalog, onSelect: setSelected }) : null, tab === "installed" && catalog ? /* @__PURE__ */ React.createElement(InstalledView, { catalog, onSelect: setSelected, actions }) : null, tab === "settings" && canEditSettings() ? /* @__PURE__ */ React.createElement(SettingsView, { catalog, onSaved: () => refresh(true) }) : null, loading && !catalog ? /* @__PURE__ */ React.createElement("div", { className: "text-text-dim" }, "Loading catalog\u2026") : null)));
+  const actions = useStoreActions(refresh, (result) => {
+    setCompletion(result);
+    if (result.restartRequired) setStaged((previous) => ({ ...previous, [result.entry.id]: result.entry.version }));
+  });
+  const data = catalog ? { ...catalog, entries: (catalog.entries || []).map((entry) => ({ ...entry, stagedVersion: staged[entry.id], downloads: downloads[entry.id] })) } : null;
+  const visible = (data?.entries || []).filter((e) => e.installedVersion || e.stagedVersion || showsInWebUi(e));
+  const counts = {
+    browse: visible.filter((e) => !e.revoked).length,
+    installed: visible.filter((e) => e.installedVersion || e.stagedVersion).length,
+    updates: visible.filter((e) => e.updateAvailable && !e.stagedVersion && !e.revoked).length
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "view cs-store flex flex-col flex-1 min-h-0" }, /* @__PURE__ */ React.createElement("style", null, STORE_CSS), actions.overlay, /* @__PURE__ */ React.createElement("div", { className: "cs-header" }, /* @__PURE__ */ React.createElement("header", { className: "cs-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", null, "Community Store"), /* @__PURE__ */ React.createElement("p", null, "Extend your engine. Make it your own.")), /* @__PURE__ */ React.createElement("div", { className: "cs-sync" }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => refresh(true), disabled: loading || actions.busy }, loading ? "Syncing\u2026" : "\u21BB Sync sources"), /* @__PURE__ */ React.createElement("div", null, catalog ? `Engine ${catalog.engineVersion} \xB7 Synced ${new Date(catalog.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Connecting to engine"))), /* @__PURE__ */ React.createElement("nav", { className: "cs-tabs", "aria-label": "Community Store views" }, [["browse", "Discover"], ["installed", "Installed"], ["updates", "Updates"], ...canEditSettings() ? [["settings", "Settings"]] : []].map(([id, label]) => /* @__PURE__ */ React.createElement("button", { key: id, className: `cs-tab ${tab === id ? "active" : ""}`, "aria-current": tab === id ? "page" : void 0, onClick: () => setTab(id) }, label, id !== "settings" && data ? /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, counts[id]) : null)))), /* @__PURE__ */ React.createElement("div", { className: "view-body cs-body" }, error ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice error", role: "alert" }, "Could not load the catalog: ", error, " ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => refresh(true), disabled: loading }, "Retry")) : null, data?.errors?.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice warn", role: "status" }, /* @__PURE__ */ React.createElement("strong", null, "Some sources could not sync."), " Results may be incomplete.", data.errors.map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i }, e.source, ": ", e.message))) : null, completion ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice", role: "status" }, completion.restartRequired ? `${completion.entry.name} ${completion.entry.version} is staged. Restart the engine to activate it.` : completion.mode === "remove" ? `${completion.entry.name} was removed.` : `${completion.entry.name} was imported${completion.mode === "copy" ? " as a copy" : ""}. It is available now.`, " ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => setCompletion(null), "aria-label": "Dismiss result" }, "Dismiss")) : null, tab === "settings" && canEditSettings() ? /* @__PURE__ */ React.createElement("div", { className: "cs-settings-scroll" }, /* @__PURE__ */ React.createElement(SettingsView, { catalog, onSaved: () => refresh(true) })) : data ? /* @__PURE__ */ React.createElement(CatalogView, { catalog: data, tab, selectedId, onSelect: setSelectedId, actions }) : loading ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty", role: "status" }, "Loading community packages\u2026") : null));
 }
 function register() {
   platform.registerNavItem({

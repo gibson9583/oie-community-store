@@ -431,7 +431,7 @@ class CommunityStorePanel extends AbstractSettingsPanel {
         Object[] options = {"Overwrite", "Install as new copy", "Cancel"};
         String message = (e.driftTracked
                 ? "You've modified this " + noun + " since installing it.\n"
-                : "This " + noun + " was installed before change tracking — the store\n"
+                : "This " + noun + " was installed using an older change-tracking format — the store\n"
                         + "can't tell whether you've modified it.\n")
                 + "Overwrite replaces " + (e.driftTracked ? "your changes" : "whatever is there")
                 + " with v" + e.version + ";\n"
@@ -500,7 +500,7 @@ class CommunityStorePanel extends AbstractSettingsPanel {
         new SwingWorker<JsonNode, Void>() {
             @Override
             protected JsonNode doInBackground() throws Exception {
-                return client.install(e.id, e.tag, mode, newLibrary, targetLibraryId);
+                return client.install(e.id, e.tag, mode, newLibrary, targetLibraryId, e.expectedContentHash, "upgrade".equals(mode) && e.modified);
             }
 
             @Override
@@ -618,7 +618,7 @@ class CommunityStorePanel extends AbstractSettingsPanel {
             if (e.modified) {
                 sb.append(e.driftTracked
                         ? "Modified since install<br>"
-                        : "Local changes unknown (installed before change tracking)<br>");
+                        : "Local changes unknown (installed using an older change-tracking format)<br>");
             }
             if (!e.newerSnapshot.isEmpty()) {
                 sb.append("Newer snapshot available: v").append(escape(e.newerSnapshot)).append("<br>");

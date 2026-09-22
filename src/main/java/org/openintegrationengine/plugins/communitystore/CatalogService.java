@@ -56,6 +56,7 @@ public class CatalogService {
     private static final int MAX_REPOS_PER_ORG = 300;
 
     private final GitHubClient gitHub;
+    private final DownloadCounts downloadCounts;
     private final StoreSettings settings;
 
     private volatile ObjectNode cachedCatalog;
@@ -66,6 +67,7 @@ public class CatalogService {
 
     public CatalogService(GitHubClient gitHub, StoreSettings settings) {
         this.gitHub = gitHub;
+        this.downloadCounts = new DownloadCounts(gitHub);
         this.settings = settings;
     }
 
@@ -101,6 +103,8 @@ public class CatalogService {
         }
         return null;
     }
+
+    public ObjectNode getDownloads(String id) { return downloadCounts.get(findEntry(id)); }
 
     /** Publisher docs are immutable per repo+tag, so cache entries never expire. */
     private final Map<String, ObjectNode> docsCache = new ConcurrentHashMap<>();
@@ -843,9 +847,17 @@ public class CatalogService {
                 // next upgrade/overwrite, which records a fresh pristineHash.
                 if (present && !"channel".equals(type)) {
                     String pristineHash = record != null ? record.path("pristineHash").asText("") : "";
-                    boolean driftTracked = !pristineHash.isEmpty();
-                    String liveHash = driftTracked ? liveContentHash(type, contentId, content) : null;
-                    entry.put("modified", !driftTracked || (liveHash != null && !liveHash.equals(pristineHash)));
+                    boolean driftTracked = !pristineHash.isEmpty() && record.path("hashFormat").asInt(0) == ContentHash.FORMAT_VERSION;
+                    String liveHash = liveContentHash(type, contentId, content);
+                    entry.put("modified", !driftTracked || liveHash == null || !liveHash.equals(pristineHash));
+                    Object live = "code-template".equals(type) ? content.templatesById.get(contentId) : content.librariesById.get(contentId);
+                    if (live != null) {
+                        try {
+                            entry.put("expectedContentHash", ContentHash.stateHash(ObjectXMLSerializer.getInstance().serialize(live)));
+                        } catch (Exception e) {
+                            entry.put("modified", true);
+                        }
+                    }
                     entry.put("driftTracked", driftTracked);
                 }
                 continue;
@@ -1015,16 +1027,16 @@ public class CatalogService {
 
     /**
      * Hash of the LIVE engine object for a present content entry, computed exactly the way the
-     * install path computed the ledger's pristineHash (see {@link ContentHash}): the code string
-     * for a code template, normalized engine XML for a library. Channels are never hashed —
+     * install path computed the ledger's pristineHash (see {@link ContentHash}): normalized
+     * engine XML for both templates and libraries, including metadata and exact code text. Channels are never hashed —
      * they are snapshot-gallery entries with no drift tracking. Null when the object
-     * cannot be resolved or serialized — the caller degrades that to "not modified".
+     * cannot be resolved or serialized — the caller treats that as modified/unknown and requires explicit consent.
      */
     private String liveContentHash(String type, String contentId, InstalledContent content) {
         try {
             if ("code-template".equals(type)) {
                 CodeTemplate template = content.templatesById.get(contentId);
-                return template == null ? null : ContentHash.codeHash(template.getCode());
+                return template == null ? null : ContentHash.normalizedXmlHash(ObjectXMLSerializer.getInstance().serialize(template));
             }
             if ("code-template-library".equals(type)) {
                 CodeTemplateLibrary library = content.librariesById.get(contentId);

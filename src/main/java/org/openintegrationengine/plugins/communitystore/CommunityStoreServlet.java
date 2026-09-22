@@ -73,6 +73,11 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
     }
 
     @Override
+    public String getDownloads(String id) throws ClientException {
+        return plugin().getCatalogService().getDownloads(id).toString();
+    }
+
+    @Override
     public String getSettings() throws ClientException {
         try {
             StoreSettings settings = plugin().getSettings();
@@ -212,6 +217,8 @@ public class CommunityStoreServlet extends MirthServlet implements CommunityStor
             if (body.has("mode")) {
                 entry.put("mode", body.path("mode").asText("install"));
             }
+            entry.put("expectedContentHash", body.path("expectedContentHash").asText(""));
+            entry.put("overwrite", body.path("overwrite").asBoolean(false));
             return plugin().getInstallService().install(entry, getCurrentUserId()).toString();
         } catch (ClientException e) {
             throw e;
