@@ -169,8 +169,8 @@ Release resolution is newest-compatible: the store walks releases newest to olde
 
 MPL-2.0, matching the engine.
 
-### Download counts
+### Community statistics
 
-The web package table and details show all-version downloads for supported GitHub release installer ZIPs. Statistics load independently of the catalog and are cached for one hour (unavailable results retry after five minutes). Counts sum matching installer filenames across retained, non-draft releases, including prereleases. Release and asset pagination is followed; incomplete or failed lookups show `—`, never a partial total. Zero is displayed as `0`.
+Catalog sources publish optional repository stars and all-version installer download totals hourly. The web table and details read both directly from the catalog; browsing does not issue a GitHub statistics request per engine or package. Missing statistics display `—`, genuine zero displays `0`, and stale values are labeled with their last-success timestamp. Details show freshness for both metrics.
 
-Matching uses the current installer filename with its version replaced by each release tag (with an optional leading `v` removed). Renamed installer families, nonstandard version tags, deleted releases, source archives, checksums, other ZIP variants, and non-GitHub hosts are excluded or unavailable. Counts include repeats and automation; they are not unique users or successful installations. The engine does not send installation telemetry. Resource limits (200 API requests or a one-minute traversal budget, checked between requests) produce unavailable rather than misleading totals.
+Download totals cover matching installer ZIPs across retained non-draft GitHub releases, including prereleases. They exclude unrelated assets, checksums, deleted releases and unsupported historical naming. Stars belong to a repository, so packages sharing one share the count. Neither metric measures installed users. The legacy downloads endpoint returns published statistics for catalog entries; direct repo/org sources retain the existing cached lookup for older clients.

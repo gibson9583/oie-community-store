@@ -516,9 +516,27 @@ function ExternalLink({ href, children }) {
     return safe ? <a href={safe} target="_blank" rel="noopener noreferrer">{children}</a> : null;
 }
 const DOWNLOAD_NOTE = 'Downloads of matching installer ZIPs across retained GitHub releases, including prereleases. Repeat and automated downloads count; this is not an installation or user count. Renamed asset families and deleted releases are excluded.';
+const DOWNLOAD_ERRORS = {
+    unsupported_asset: 'Download statistics are not published for this installer URL or filename.',
+    package_not_found: 'This package is no longer in the catalog.',
+    revoked: 'This package has been removed from its source.',
+    no_matching_assets: 'No matching installer assets were found in GitHub releases.',
+    rate_limit_or_access_denied: 'GitHub rate limit reached or repository access denied. Check the GitHub token in Store Settings; the lookup retries after five minutes.',
+    repository_not_found: 'GitHub could not find or grant access to the repository.',
+    lookup_limit: 'The release history could not be completely counted within the lookup limits.',
+    github_unreachable: 'The engine could not reach GitHub. Check its network and TLS configuration.',
+    invalid_response: 'GitHub returned an unexpected statistics response.',
+    interrupted: 'The download lookup was interrupted.',
+};
+function metricFreshness(stats) { return stats?.checkedAt ? `${stats.stale ? 'Refresh failed; last successful count' : 'Updated'}: ${new Date(stats.checkedAt).toLocaleString()}` : 'Statistics have not been published by this catalog yet.'; }
+function downloadError(entry) { return DOWNLOAD_ERRORS[entry.downloads?.reason] || 'This catalog has no download count for this package.'; }
 function DownloadCount({ entry }) {
     const stats = entry.downloads;
-    return <span title={DOWNLOAD_NOTE}>{stats?.status === 'available' && Number.isSafeInteger(stats.count) && stats.count >= 0 ? stats.count.toLocaleString() : '—'}</span>;
+    return <span title={stats?.status === 'available' ? `${DOWNLOAD_NOTE} ${metricFreshness(stats)}` : downloadError(entry)}>{stats?.status === 'available' && Number.isSafeInteger(stats.count) && stats.count >= 0 ? `${stats.count.toLocaleString()}${stats.stale ? ' (stale)' : ''}` : '—'}</span>;
+}
+function StarCount({ entry }) {
+    const stats=entry.stars;
+    return <span title={`GitHub repository stars; packages sharing a repository share this count. ${metricFreshness(stats)}`}>{stats?.status === 'available' && Number.isSafeInteger(stats.count) && stats.count >= 0 ? `${stats.count.toLocaleString()}${stats.stale ? ' (stale)' : ''}` : '—'}</span>;
 }
 function DetailView({ entry, actions }) {
     const [docsOpen, setDocsOpen] = React.useState(true);
@@ -537,12 +555,13 @@ function DetailView({ entry, actions }) {
         <div className="cs-meta">{TYPE_LABELS[entry.type] || entry.type}{entry.authors?.length ? ` · by ${entry.authors.join(', ')}` : ''}</div>
         <p className="cs-detail-description">{entry.description || 'No description provided.'}</p>
         <PackageStatus entry={entry} />
-        <p className="cs-footnote">{DOWNLOAD_NOTE} {entry.downloads?.status !== 'available' ? 'Count unavailable for this package.' : ''}</p>
+        <p className="cs-footnote">{DOWNLOAD_NOTE} {entry.downloads?.status !== 'available' ? downloadError(entry) : ''}</p>
         <dl className="cs-facts">
             <div className="cs-fact"><dt>Offered version</dt><dd>{entry.revoked ? 'Unavailable' : entry.version}</dd></div>
             <div className="cs-fact"><dt>Installed version</dt><dd>{entry.installedVersion || 'Not installed'}</dd></div>
             {entry.stagedVersion ? <div className="cs-fact"><dt>Staged version</dt><dd>{entry.stagedVersion}</dd></div> : null}
-            <div className="cs-fact"><dt>Downloads · all versions</dt><dd><DownloadCount entry={entry} /></dd></div>
+            <div className="cs-fact"><dt>Downloads · all versions</dt><dd><DownloadCount entry={entry} /><div className="cs-footnote">{metricFreshness(entry.downloads)}</div></dd></div>
+            <div className="cs-fact"><dt>GitHub stars</dt><dd><StarCount entry={entry} /><div className="cs-footnote">{metricFreshness(entry.stars)}</div></dd></div>
             <div className="cs-fact"><dt>Engine compatibility</dt><dd>{entry.minEngineVersion || 'Unspecified'}{entry.maxEngineVersion ? ` – ${entry.maxEngineVersion}` : entry.minEngineVersion ? '+' : ''}</dd></div>
         </dl>
         {entry.revoked ? <p className="cs-notice error">This package is no longer offered by its source. Review whether you still trust it.</p>
@@ -584,18 +603,42 @@ function statusGroup(e) {
     return e.installedVersion ? 'Installed' : 'Available';
 }
 const STATUS_ORDER = ['Restart pending', 'Needs attention', 'Updates available', 'Installed', 'Available'];
+const SORT_COLUMNS = [['name','Package'],['type','Type'],['installedVersion','Installed'],['version','Available'],['downloads','Downloads'],['stars','Stars'],['status','Status']];
+function comparePackages(a, b, key, direction) {
+    const value = entry => {
+        if (key === 'downloads' || key === 'stars') {
+            const metric = entry[key];
+            return metric?.status === 'available' && Number.isSafeInteger(metric.count) && metric.count >= 0 ? metric.count : null;
+        }
+        if (key === 'type') return typeRank(entry.type);
+        if (key === 'status') return STATUS_ORDER.indexOf(statusGroup(entry));
+        if (key === 'version' && entry.revoked) return null;
+        return entry[key] || null;
+    };
+    const x=value(a), y=value(b);
+    // Missing values remain last in either direction; zero is a real count.
+    if (x == null && y != null) return 1;
+    if (y == null && x != null) return -1;
+    const compared = x == null ? 0 : typeof x === 'number' ? x-y : x.localeCompare(y, undefined, {numeric:true, sensitivity:'base'});
+    return compared * (direction === 'desc' ? -1 : 1) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+}
 function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
     const [search, setSearch] = React.useState('');
     const [typeFilter, setTypeFilter] = React.useState('');
-    const [groupBy, setGroupBy] = React.useState(() => getPref('groupBy', 'status'));
+    const [groupBy, setGroupBy] = React.useState(() => getPref('groupBy', 'type'));
     const [sortBy, setSortBy] = React.useState(() => getPref('sortBy', 'name'));
+    const [sortDirection, setSortDirection] = React.useState(() => getPref('sortDirection', 'asc'));
+    const changeSort = (key, toggle = false) => {
+        const direction = toggle && key === sortBy ? (sortDirection === 'asc' ? 'desc' : 'asc') : ['downloads','stars','installedVersion','version'].includes(key) ? 'desc' : 'asc';
+        setSortBy(key); setSortDirection(direction); setPref('sortBy',key); setPref('sortDirection',direction);
+    };
     const [collapsed, setCollapsed] = React.useState({});
     const visible = (catalog.entries || []).filter(e => e.installedVersion || e.stagedVersion || showsInWebUi(e));
     const entries = visible.filter(e => (tab === 'installed' ? e.installedVersion || e.stagedVersion
         : tab === 'updates' ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked)
         && (!typeFilter || e.type === typeFilter)
         && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
-        .sort((a,b) => (sortBy === 'type' ? typeRank(a.type) - typeRank(b.type) : sortBy === 'status' ? STATUS_ORDER.indexOf(statusGroup(a)) - STATUS_ORDER.indexOf(statusGroup(b)) : 0) || a.name.localeCompare(b.name));
+        .sort((a,b) => comparePackages(a,b,sortBy,sortDirection));
     const types = [...new Set(visible.map(e => e.type))].sort((a,b) => typeRank(a) - typeRank(b));
     const groups = new Map();
     for (const entry of entries) {
@@ -610,16 +653,17 @@ function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
             <label className="cs-search"><input className="field" aria-label="Search packages" placeholder="Search community packages…" value={search} onChange={e => setSearch(e.target.value)} /></label>
             <select className="field" aria-label="Package type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">All package types</option>{types.map(type => <option key={type} value={type}>{TYPE_LABELS[type] || type}</option>)}</select>
             <select className="field" aria-label="Group packages" value={groupBy} onChange={e => {setGroupBy(e.target.value);setPref('groupBy',e.target.value);}}><option value="status">Group by status</option><option value="type">Group by type</option><option value="none">No grouping</option></select>
-            <select className="field" aria-label="Sort packages" value={sortBy} onChange={e => {setSortBy(e.target.value);setPref('sortBy',e.target.value);}}><option value="name">Sort by name</option><option value="type">Sort by type</option><option value="status">Sort by status</option></select>
+            <select className="field" aria-label="Sort packages" value={sortBy} onChange={e => changeSort(e.target.value)}>{SORT_COLUMNS.map(([key,label]) => <option key={key} value={key}>Sort by {label.toLowerCase()}</option>)}</select>
+            <button className="btn btn-sm" aria-label="Reverse sort direction" onClick={() => changeSort(sortBy,true)}>{sortDirection === 'asc' ? 'Ascending ↑' : 'Descending ↓'}</button>
             <span className="cs-result-count" role="status">{entries.length} package{entries.length === 1 ? '' : 's'}</span>
         </div>
         <div className="cs-workspace" tabIndex={0} aria-label="Package list">
-            <table className="cs-table"><thead><tr><th scope="col">Package</th><th scope="col">Type</th><th scope="col">Installed</th><th scope="col">Available</th><th scope="col" title={DOWNLOAD_NOTE}>Downloads</th><th scope="col">Status</th></tr></thead>
+            <table className="cs-table"><thead><tr>{SORT_COLUMNS.map(([key,label]) => <th key={key} scope="col" aria-sort={sortBy === key ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}><button className="cs-sort-heading" onClick={() => changeSort(key,true)} title={key === 'downloads' ? DOWNLOAD_NOTE : `Sort by ${label.toLowerCase()}`}>{label}<span aria-hidden="true">{sortBy === key ? sortDirection === 'asc' ? ' ↑' : ' ↓' : ' ↕'}</span></button></th>)}</tr></thead>
                 {orderedGroups.map(([key, items]) => <tbody key={key}>
-                    {groupBy !== 'none' ? <tr className="cs-group"><th colSpan={6} scope="rowgroup"><button aria-expanded={!collapsed[groupBy+key]} onClick={() => setCollapsed(old => ({...old,[groupBy+key]:!old[groupBy+key]}))}><span aria-hidden="true">{collapsed[groupBy+key] ? '▸' : '▾'}</span> {groupBy === 'type' ? TYPE_LABELS[key] || key : key} <span className="cs-count">{items.length}</span></button></th></tr> : null}
+                    {groupBy !== 'none' ? <tr className="cs-group"><th colSpan={7} scope="rowgroup"><button aria-expanded={!collapsed[groupBy+key]} onClick={() => setCollapsed(old => ({...old,[groupBy+key]:!old[groupBy+key]}))}><span aria-hidden="true">{collapsed[groupBy+key] ? '▸' : '▾'}</span> {groupBy === 'type' ? TYPE_LABELS[key] || key : key} <span className="cs-count">{items.length}</span></button></th></tr> : null}
                     {(groupBy === 'none' || !collapsed[groupBy+key]) && items.map(entry => <tr key={entry.id} className="cs-package-row" onClick={() => onSelect(entry.id)}>
                         <td><button className="cs-package" aria-haspopup="dialog" onClick={e => {e.stopPropagation();onSelect(entry.id);}}><PackageIcon type={entry.type} /><span><span className="cs-name">{entry.name}</span><span className="cs-description">{entry.description}</span></span></button></td>
-                        <td>{TYPE_LABELS[entry.type] || entry.type}</td><td>{entry.installedVersion || '—'}</td><td>{entry.revoked ? '—' : entry.version}</td><td><DownloadCount entry={entry} /></td><td><PackageStatus entry={entry} /></td>
+                        <td>{TYPE_LABELS[entry.type] || entry.type}</td><td>{entry.installedVersion || '—'}</td><td>{entry.revoked ? '—' : entry.version}</td><td><DownloadCount entry={entry} /></td><td><StarCount entry={entry} /></td><td><PackageStatus entry={entry} /></td>
                     </tr>)}
                 </tbody>)}
             </table>
@@ -800,22 +844,6 @@ function CommunityStoreView() {
     const [selectedId, setSelectedId] = React.useState(null);
     const [completion, setCompletion] = React.useState(null);
     const [staged, setStaged] = React.useState({});
-    const [downloads, setDownloads] = React.useState({});
-    React.useEffect(() => {
-        let cancelled = false;
-        setDownloads({});
-        async function load() {
-            for (const entry of catalog?.entries || []) {
-                if (cancelled) break;
-                try {
-                    const stats = await apiGet(`${BASE}/catalog/${encodeURIComponent(entry.id)}/downloads`);
-                    if (!cancelled) setDownloads(old => ({...old, [entry.id]:stats}));
-                } catch { /* Statistics never block the catalog. */ }
-            }
-        }
-        load();
-        return () => { cancelled = true; };
-    }, [catalog]);
     const request = React.useRef(0);
     const refresh = async (force) => {
         const current = ++request.current;
@@ -834,7 +862,7 @@ function CommunityStoreView() {
         setCompletion(result);
         if (result.restartRequired) setStaged(previous => ({ ...previous, [result.entry.id]: result.entry.version }));
     });
-    const data = catalog ? { ...catalog, entries: (catalog.entries || []).map(entry => ({...entry, stagedVersion: staged[entry.id], downloads: downloads[entry.id]})) } : null;
+    const data = catalog ? { ...catalog, entries: (catalog.entries || []).map(entry => ({...entry, stagedVersion: staged[entry.id], downloads: entry.statistics?.downloads, stars: entry.statistics?.stars})) } : null;
     const visible = (data?.entries || []).filter(e => e.installedVersion || e.stagedVersion || showsInWebUi(e));
     const counts = {
         browse: visible.filter(e => !e.revoked).length,

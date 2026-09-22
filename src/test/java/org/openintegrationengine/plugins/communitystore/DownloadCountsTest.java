@@ -11,6 +11,22 @@ public class DownloadCountsTest {
     private static final ObjectMapper J = new ObjectMapper();
     private ObjectNode entry() { return J.createObjectNode().put("assetUrl", "https://github.com/owner/repo/releases/download/v2.0.0/plugin-2.0.0.zip").put("assetName", "plugin-2.0.0.zip").put("version", "2.0.0"); }
     private ObjectNode asset(long id, String name, long count) { return J.createObjectNode().put("id",id).put("name",name).put("download_count",count); }
+    @Test public void embeddedReleaseAssetsNeedOnlyOneRequest() throws Exception {
+        GitHubClient g=mock(GitHubClient.class);
+        ObjectNode release=J.createObjectNode().put("id",1).put("tag_name","v2.0.0");
+        release.set("assets",J.createArrayNode().add(asset(1,"plugin-2.0.0.zip",15)));
+        when(g.getApiJson(contains("/releases?"))).thenReturn(J.createArrayNode().add(release));
+        assertEquals(15,new DownloadCounts(g).get(entry()).path("count").asLong());
+        verify(g,times(1)).getApiJson(anyString());
+    }
+    @Test public void rateLimitIsExplainedAndCachedWithoutPartialCount() throws Exception {
+        GitHubClient g=mock(GitHubClient.class);
+        when(g.getApiJson(anyString())).thenThrow(new IOException("GitHub rate limit or access denied (HTTP 403)"));
+        DownloadCounts counts=new DownloadCounts(g);
+        assertEquals("rate_limit_or_access_denied",counts.get(entry()).path("reason").asText());
+        assertFalse(counts.get(entry()).has("count"));
+        verify(g,times(1)).getApiJson(anyString());
+    }
     @Test public void sumsAllVersionsExcludesChecksumsVariantsAndDraftsAndCaches() throws Exception {
         GitHubClient g=mock(GitHubClient.class);
         when(g.getApiJson(contains("/releases?"))).thenReturn(J.readTree("[{\"id\":1,\"tag_name\":\"v1.0.0\"},{\"id\":2,\"tag_name\":\"v2.0.0\",\"prerelease\":true},{\"id\":3,\"draft\":true}]"));

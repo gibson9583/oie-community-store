@@ -31,6 +31,28 @@ public class InstallServiceChecks {
     private final Map<String, CodeTemplate> templateRows = new HashMap<>();
     private final List<CodeTemplateLibrary> libraryRows = new ArrayList<>();
 
+    @Test public void catalogStatisticsPassThroughWithoutGitHubRequests() throws Exception {
+        CatalogService catalog = new CatalogService(download, settings);
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        ObjectNode pkg = mapper.createObjectNode().put("id", "demo").put("type", "plugin").put("repository", "https://github.com/a/b");
+        pkg.putArray("versions").addObject().put("version", "1.0.0").put("installerUrl", "https://github.com/a/b/releases/download/v1.0.0/demo-1.0.0.zip");
+        pkg.putObject("statistics").putObject("downloads").put("status", "available").put("count", 12);
+        ((ObjectNode) pkg.get("statistics")).putObject("stars").put("status", "available").put("count", 3);
+        var convert = CatalogService.class.getDeclaredMethod("entryFromIndexPackage", com.fasterxml.jackson.databind.JsonNode.class, SemVer.class);
+        convert.setAccessible(true);
+        ObjectNode entry = (ObjectNode) convert.invoke(catalog, pkg, SemVer.parse("4.6.0"));
+        assertEquals(12, entry.path("statistics").path("downloads").path("count").asInt());
+        assertEquals(3, entry.path("statistics").path("stars").path("count").asInt());
+        CatalogService spyCatalog = spy(catalog);
+        doReturn(entry).when(spyCatalog).findEntry("demo");
+        assertEquals(12, spyCatalog.getDownloads("demo").path("count").asInt());
+        pkg.remove("statistics");
+        entry = (ObjectNode) convert.invoke(catalog, pkg, SemVer.parse("4.6.0"));
+        doReturn(entry).when(spyCatalog).findEntry("demo");
+        assertEquals("unavailable", spyCatalog.getDownloads("demo").path("status").asText());
+        verifyNoInteractions(download);
+    }
+
     @Before public void setup() throws Exception {
         factory = mock(ControllerFactory.class);
         factoryStatic = mockStatic(ControllerFactory.class);

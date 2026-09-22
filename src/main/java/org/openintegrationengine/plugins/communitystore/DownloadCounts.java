@@ -18,8 +18,9 @@ final class DownloadCounts {
     DownloadCounts(GitHubClient github) { this.github = github; }
 
     synchronized ObjectNode get(JsonNode entry) {
-        ObjectNode unavailable = JSON.createObjectNode().put("status", "unavailable");
-        if (entry == null || entry.path("revoked").asBoolean()) return unavailable;
+        ObjectNode unavailable = JSON.createObjectNode().put("status", "unavailable").put("reason", "unsupported_asset");
+        if (entry == null) return unavailable.put("reason", "package_not_found");
+        if (entry.path("revoked").asBoolean()) return unavailable.put("reason", "revoked");
         String url = entry.path("assetUrl").asText("");
         String version = entry.path("version").asText("");
         String name = entry.path("assetName").asText("");
@@ -42,7 +43,7 @@ final class DownloadCounts {
         long now = System.currentTimeMillis();
         ObjectNode previous = cache.get(key);
         if (previous != null && now - previous.path("checkedAt").asLong() < (previous.has("count") ? 3600000 : 300000)) return previous.deepCopy();
-        ObjectNode result = unavailable;
+        ObjectNode result = unavailable.put("reason", "no_matching_assets");
         try {
             long total = 0; int matched = 0; boolean complete = false;
             int requests = 0; long deadline = now + 60000;
@@ -60,8 +61,18 @@ final class DownloadCounts {
                     String expectedName = prefix + tagVersion + suffix;
                     boolean assetsComplete = false;
                     for (int assetPage = 1; assetPage <= 100; assetPage++) {
-                        if (++requests > 200 || System.currentTimeMillis() > deadline) throw new IllegalStateException("Statistics budget exceeded");
-                        JsonNode assets = github.getApiJson(GitHubClient.API_BASE + "/repos/" + repo + "/releases/" + id + "/assets?per_page=100&page=" + assetPage);
+                        // Release responses already include assets. Small embedded lists are
+                        // complete; conservatively paginate lists reaching GitHub's default
+                        // page size, or responses with no embedded assets.
+                        JsonNode embedded = release.path("assets");
+                        boolean useEmbedded = assetPage == 1 && embedded.isArray() && embedded.size() < 30;
+                        JsonNode assets;
+                        if (useEmbedded) {
+                            assets = embedded;
+                        } else {
+                            if (++requests > 200 || System.currentTimeMillis() > deadline) throw new IllegalStateException("Statistics budget exceeded");
+                            assets = github.getApiJson(GitHubClient.API_BASE + "/repos/" + repo + "/releases/" + id + "/assets?per_page=100&page=" + assetPage);
+                        }
                         if (!assets.isArray()) throw new IllegalStateException("Invalid assets");
                         for (JsonNode asset : assets) {
                             if (!family.matcher(asset.path("name").asText()).matches()) continue;
@@ -81,8 +92,17 @@ final class DownloadCounts {
                 if (releases.size() < 100) { complete = true; break; }
             }
             if (complete && matched > 0) result = JSON.createObjectNode().put("status", "available").put("count", total).put("assets", matched);
-        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        catch (Exception e) { /* Optional metric: never publish a partial sum as an all-version count. */ }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            result.put("reason", "interrupted");
+        } catch (Exception e) {
+            // Return stable, non-sensitive reasons. Never publish partial totals.
+            String message = e.getMessage() == null ? "" : e.getMessage();
+            result.put("reason", message.contains("HTTP 403") || message.contains("HTTP 429") ? "rate_limit_or_access_denied"
+                    : message.contains("HTTP 404") ? "repository_not_found"
+                    : message.contains("budget") || message.contains("Incomplete") ? "lookup_limit"
+                    : e instanceof java.io.IOException ? "github_unreachable" : "invalid_response");
+        }
         result.put("checkedAt", now);
         if (cache.size() >= 500) cache.remove(cache.keySet().iterator().next());
         cache.put(key, result.deepCopy());

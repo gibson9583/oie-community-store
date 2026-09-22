@@ -2180,6 +2180,7 @@ var STORE_CSS = `
 .cs-store .cs-table { width:100%; border-collapse:separate; border-spacing:0; text-align:left; }
 .cs-store .cs-table th, .cs-store .cs-table td { padding:12px 16px; border-bottom:1px solid var(--line); font-size:12px; }
 .cs-store .cs-table thead th { position:sticky; top:0; z-index:1; background:var(--bg2); color:var(--text-dim); white-space:nowrap; }
+.cs-store .cs-sort-heading { border:0; padding:0; background:none; color:inherit; font:inherit; font-weight:600; cursor:pointer; text-align:left; width:100%; }
 .cs-store .cs-table td:first-child { width:52%; min-width:260px; }
 .cs-store .cs-table td:not(:first-child) { white-space:nowrap; }
 .cs-store .cs-package-row { background:var(--bg1); cursor:pointer; }
@@ -2574,9 +2575,31 @@ function ExternalLink({ href, children }) {
   return safe ? /* @__PURE__ */ React.createElement("a", { href: safe, target: "_blank", rel: "noopener noreferrer" }, children) : null;
 }
 var DOWNLOAD_NOTE = "Downloads of matching installer ZIPs across retained GitHub releases, including prereleases. Repeat and automated downloads count; this is not an installation or user count. Renamed asset families and deleted releases are excluded.";
+var DOWNLOAD_ERRORS = {
+  unsupported_asset: "Download statistics are not published for this installer URL or filename.",
+  package_not_found: "This package is no longer in the catalog.",
+  revoked: "This package has been removed from its source.",
+  no_matching_assets: "No matching installer assets were found in GitHub releases.",
+  rate_limit_or_access_denied: "GitHub rate limit reached or repository access denied. Check the GitHub token in Store Settings; the lookup retries after five minutes.",
+  repository_not_found: "GitHub could not find or grant access to the repository.",
+  lookup_limit: "The release history could not be completely counted within the lookup limits.",
+  github_unreachable: "The engine could not reach GitHub. Check its network and TLS configuration.",
+  invalid_response: "GitHub returned an unexpected statistics response.",
+  interrupted: "The download lookup was interrupted."
+};
+function metricFreshness(stats) {
+  return stats?.checkedAt ? `${stats.stale ? "Refresh failed; last successful count" : "Updated"}: ${new Date(stats.checkedAt).toLocaleString()}` : "Statistics have not been published by this catalog yet.";
+}
+function downloadError(entry) {
+  return DOWNLOAD_ERRORS[entry.downloads?.reason] || "This catalog has no download count for this package.";
+}
 function DownloadCount({ entry }) {
   const stats = entry.downloads;
-  return /* @__PURE__ */ React.createElement("span", { title: DOWNLOAD_NOTE }, stats?.status === "available" && Number.isSafeInteger(stats.count) && stats.count >= 0 ? stats.count.toLocaleString() : "\u2014");
+  return /* @__PURE__ */ React.createElement("span", { title: stats?.status === "available" ? `${DOWNLOAD_NOTE} ${metricFreshness(stats)}` : downloadError(entry) }, stats?.status === "available" && Number.isSafeInteger(stats.count) && stats.count >= 0 ? `${stats.count.toLocaleString()}${stats.stale ? " (stale)" : ""}` : "\u2014");
+}
+function StarCount({ entry }) {
+  const stats = entry.stars;
+  return /* @__PURE__ */ React.createElement("span", { title: `GitHub repository stars; packages sharing a repository share this count. ${metricFreshness(stats)}` }, stats?.status === "available" && Number.isSafeInteger(stats.count) && stats.count >= 0 ? `${stats.count.toLocaleString()}${stats.stale ? " (stale)" : ""}` : "\u2014");
 }
 function DetailView({ entry, actions }) {
   const [docsOpen, setDocsOpen] = React.useState(true);
@@ -2587,7 +2610,7 @@ function DetailView({ entry, actions }) {
   const update = entry.updateAvailable || content && entry.installedVersion && !channelCopy;
   const actionable = canInstall() && entry.installable && entry.compatible && !entry.revoked && !entry.stagedVersion && (content || !entry.installedVersion || entry.updateAvailable);
   const label = channelCopy ? "Import as copy" : update ? entry.updateAvailable ? `Review update to ${entry.version}` : "Review re-import" : content ? "Review import" : "Review installation";
-  return /* @__PURE__ */ React.createElement("aside", { className: "cs-detail", "aria-label": "Selected package" }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("h2", null, entry.name), /* @__PURE__ */ React.createElement("div", { className: "cs-meta" }, TYPE_LABELS[entry.type] || entry.type, entry.authors?.length ? ` \xB7 by ${entry.authors.join(", ")}` : ""), /* @__PURE__ */ React.createElement("p", { className: "cs-detail-description" }, entry.description || "No description provided."), /* @__PURE__ */ React.createElement(PackageStatus, { entry }), /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, DOWNLOAD_NOTE, " ", entry.downloads?.status !== "available" ? "Count unavailable for this package." : ""), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Offered version"), /* @__PURE__ */ React.createElement("dd", null, entry.revoked ? "Unavailable" : entry.version)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Installed version"), /* @__PURE__ */ React.createElement("dd", null, entry.installedVersion || "Not installed")), entry.stagedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Staged version"), /* @__PURE__ */ React.createElement("dd", null, entry.stagedVersion)) : null, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Downloads \xB7 all versions"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry }))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Engine compatibility"), /* @__PURE__ */ React.createElement("dd", null, entry.minEngineVersion || "Unspecified", entry.maxEngineVersion ? ` \u2013 ${entry.maxEngineVersion}` : entry.minEngineVersion ? "+" : ""))), entry.revoked ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice error" }, "This package is no longer offered by its source. Review whether you still trust it.") : entry.stagedVersion ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Version ", entry.stagedVersion, " is staged. Restart the engine to activate it.") : !entry.compatible ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "No compatible version is available for this engine.") : /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, content ? "Imported content is available immediately. No restart needed." : "Engine restart required after installation."), entry.modified ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, entry.driftTracked === false ? "Local changes are unknown with the previous tracking format." : "Local edits detected.", " Review before replacing this content. You can keep your changes by importing a copy.") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".") : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, "Newer snapshot available: ", entry.newerSnapshot, ". Import as a copy to keep the installed channel.") : null, actionable ? /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("aside", { className: "cs-detail", "aria-label": "Selected package" }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("h2", null, entry.name), /* @__PURE__ */ React.createElement("div", { className: "cs-meta" }, TYPE_LABELS[entry.type] || entry.type, entry.authors?.length ? ` \xB7 by ${entry.authors.join(", ")}` : ""), /* @__PURE__ */ React.createElement("p", { className: "cs-detail-description" }, entry.description || "No description provided."), /* @__PURE__ */ React.createElement(PackageStatus, { entry }), /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, DOWNLOAD_NOTE, " ", entry.downloads?.status !== "available" ? downloadError(entry) : ""), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Offered version"), /* @__PURE__ */ React.createElement("dd", null, entry.revoked ? "Unavailable" : entry.version)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Installed version"), /* @__PURE__ */ React.createElement("dd", null, entry.installedVersion || "Not installed")), entry.stagedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Staged version"), /* @__PURE__ */ React.createElement("dd", null, entry.stagedVersion)) : null, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Downloads \xB7 all versions"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry }), /* @__PURE__ */ React.createElement("div", { className: "cs-footnote" }, metricFreshness(entry.downloads)))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "GitHub stars"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(StarCount, { entry }), /* @__PURE__ */ React.createElement("div", { className: "cs-footnote" }, metricFreshness(entry.stars)))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Engine compatibility"), /* @__PURE__ */ React.createElement("dd", null, entry.minEngineVersion || "Unspecified", entry.maxEngineVersion ? ` \u2013 ${entry.maxEngineVersion}` : entry.minEngineVersion ? "+" : ""))), entry.revoked ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice error" }, "This package is no longer offered by its source. Review whether you still trust it.") : entry.stagedVersion ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Version ", entry.stagedVersion, " is staged. Restart the engine to activate it.") : !entry.compatible ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "No compatible version is available for this engine.") : /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, content ? "Imported content is available immediately. No restart needed." : "Engine restart required after installation."), entry.modified ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, entry.driftTracked === false ? "Local changes are unknown with the previous tracking format." : "Local edits detected.", " Review before replacing this content. You can keep your changes by importing a copy.") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".") : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, "Newer snapshot available: ", entry.newerSnapshot, ". Import as a copy to keep the installed channel.") : null, actionable ? /* @__PURE__ */ React.createElement(
     "button",
     {
       className: "btn btn-primary cs-primary-action",
@@ -2604,14 +2627,40 @@ function statusGroup(e) {
   return e.installedVersion ? "Installed" : "Available";
 }
 var STATUS_ORDER = ["Restart pending", "Needs attention", "Updates available", "Installed", "Available"];
+var SORT_COLUMNS = [["name", "Package"], ["type", "Type"], ["installedVersion", "Installed"], ["version", "Available"], ["downloads", "Downloads"], ["stars", "Stars"], ["status", "Status"]];
+function comparePackages(a, b, key, direction) {
+  const value = (entry) => {
+    if (key === "downloads" || key === "stars") {
+      const metric = entry[key];
+      return metric?.status === "available" && Number.isSafeInteger(metric.count) && metric.count >= 0 ? metric.count : null;
+    }
+    if (key === "type") return typeRank(entry.type);
+    if (key === "status") return STATUS_ORDER.indexOf(statusGroup(entry));
+    if (key === "version" && entry.revoked) return null;
+    return entry[key] || null;
+  };
+  const x = value(a), y = value(b);
+  if (x == null && y != null) return 1;
+  if (y == null && x != null) return -1;
+  const compared = x == null ? 0 : typeof x === "number" ? x - y : x.localeCompare(y, void 0, { numeric: true, sensitivity: "base" });
+  return compared * (direction === "desc" ? -1 : 1) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+}
 function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
   const [search, setSearch] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
-  const [groupBy, setGroupBy] = React.useState(() => getPref("groupBy", "status"));
+  const [groupBy, setGroupBy] = React.useState(() => getPref("groupBy", "type"));
   const [sortBy, setSortBy] = React.useState(() => getPref("sortBy", "name"));
+  const [sortDirection, setSortDirection] = React.useState(() => getPref("sortDirection", "asc"));
+  const changeSort = (key, toggle = false) => {
+    const direction = toggle && key === sortBy ? sortDirection === "asc" ? "desc" : "asc" : ["downloads", "stars", "installedVersion", "version"].includes(key) ? "desc" : "asc";
+    setSortBy(key);
+    setSortDirection(direction);
+    setPref("sortBy", key);
+    setPref("sortDirection", direction);
+  };
   const [collapsed, setCollapsed] = React.useState({});
   const visible = (catalog.entries || []).filter((e) => e.installedVersion || e.stagedVersion || showsInWebUi(e));
-  const entries = visible.filter((e) => (tab === "installed" ? e.installedVersion || e.stagedVersion : tab === "updates" ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked) && (!typeFilter || e.type === typeFilter) && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(" ")}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => (sortBy === "type" ? typeRank(a.type) - typeRank(b.type) : sortBy === "status" ? STATUS_ORDER.indexOf(statusGroup(a)) - STATUS_ORDER.indexOf(statusGroup(b)) : 0) || a.name.localeCompare(b.name));
+  const entries = visible.filter((e) => (tab === "installed" ? e.installedVersion || e.stagedVersion : tab === "updates" ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked) && (!typeFilter || e.type === typeFilter) && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(" ")}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => comparePackages(a, b, sortBy, sortDirection));
   const types = [...new Set(visible.map((e) => e.type))].sort((a, b) => typeRank(a) - typeRank(b));
   const groups = /* @__PURE__ */ new Map();
   for (const entry of entries) {
@@ -2624,13 +2673,10 @@ function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
   return /* @__PURE__ */ React.createElement("div", { className: "cs-catalog" }, /* @__PURE__ */ React.createElement("div", { className: "cs-toolbar" }, /* @__PURE__ */ React.createElement("label", { className: "cs-search" }, /* @__PURE__ */ React.createElement("input", { className: "field", "aria-label": "Search packages", placeholder: "Search community packages\u2026", value: search, onChange: (e) => setSearch(e.target.value) })), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Package type", value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All package types"), types.map((type) => /* @__PURE__ */ React.createElement("option", { key: type, value: type }, TYPE_LABELS[type] || type))), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Group packages", value: groupBy, onChange: (e) => {
     setGroupBy(e.target.value);
     setPref("groupBy", e.target.value);
-  } }, /* @__PURE__ */ React.createElement("option", { value: "status" }, "Group by status"), /* @__PURE__ */ React.createElement("option", { value: "type" }, "Group by type"), /* @__PURE__ */ React.createElement("option", { value: "none" }, "No grouping")), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Sort packages", value: sortBy, onChange: (e) => {
-    setSortBy(e.target.value);
-    setPref("sortBy", e.target.value);
-  } }, /* @__PURE__ */ React.createElement("option", { value: "name" }, "Sort by name"), /* @__PURE__ */ React.createElement("option", { value: "type" }, "Sort by type"), /* @__PURE__ */ React.createElement("option", { value: "status" }, "Sort by status")), /* @__PURE__ */ React.createElement("span", { className: "cs-result-count", role: "status" }, entries.length, " package", entries.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement("div", { className: "cs-workspace", tabIndex: 0, "aria-label": "Package list" }, /* @__PURE__ */ React.createElement("table", { className: "cs-table" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Package"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Type"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Installed"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Available"), /* @__PURE__ */ React.createElement("th", { scope: "col", title: DOWNLOAD_NOTE }, "Downloads"), /* @__PURE__ */ React.createElement("th", { scope: "col" }, "Status"))), orderedGroups.map(([key, items]) => /* @__PURE__ */ React.createElement("tbody", { key }, groupBy !== "none" ? /* @__PURE__ */ React.createElement("tr", { className: "cs-group" }, /* @__PURE__ */ React.createElement("th", { colSpan: 6, scope: "rowgroup" }, /* @__PURE__ */ React.createElement("button", { "aria-expanded": !collapsed[groupBy + key], onClick: () => setCollapsed((old) => ({ ...old, [groupBy + key]: !old[groupBy + key] })) }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, collapsed[groupBy + key] ? "\u25B8" : "\u25BE"), " ", groupBy === "type" ? TYPE_LABELS[key] || key : key, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, items.length)))) : null, (groupBy === "none" || !collapsed[groupBy + key]) && items.map((entry) => /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: "cs-package-row", onClick: () => onSelect(entry.id) }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("button", { className: "cs-package", "aria-haspopup": "dialog", onClick: (e) => {
+  } }, /* @__PURE__ */ React.createElement("option", { value: "status" }, "Group by status"), /* @__PURE__ */ React.createElement("option", { value: "type" }, "Group by type"), /* @__PURE__ */ React.createElement("option", { value: "none" }, "No grouping")), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Sort packages", value: sortBy, onChange: (e) => changeSort(e.target.value) }, SORT_COLUMNS.map(([key, label]) => /* @__PURE__ */ React.createElement("option", { key, value: key }, "Sort by ", label.toLowerCase()))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", "aria-label": "Reverse sort direction", onClick: () => changeSort(sortBy, true) }, sortDirection === "asc" ? "Ascending \u2191" : "Descending \u2193"), /* @__PURE__ */ React.createElement("span", { className: "cs-result-count", role: "status" }, entries.length, " package", entries.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement("div", { className: "cs-workspace", tabIndex: 0, "aria-label": "Package list" }, /* @__PURE__ */ React.createElement("table", { className: "cs-table" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, SORT_COLUMNS.map(([key, label]) => /* @__PURE__ */ React.createElement("th", { key, scope: "col", "aria-sort": sortBy === key ? sortDirection === "asc" ? "ascending" : "descending" : "none" }, /* @__PURE__ */ React.createElement("button", { className: "cs-sort-heading", onClick: () => changeSort(key, true), title: key === "downloads" ? DOWNLOAD_NOTE : `Sort by ${label.toLowerCase()}` }, label, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, sortBy === key ? sortDirection === "asc" ? " \u2191" : " \u2193" : " \u2195")))))), orderedGroups.map(([key, items]) => /* @__PURE__ */ React.createElement("tbody", { key }, groupBy !== "none" ? /* @__PURE__ */ React.createElement("tr", { className: "cs-group" }, /* @__PURE__ */ React.createElement("th", { colSpan: 7, scope: "rowgroup" }, /* @__PURE__ */ React.createElement("button", { "aria-expanded": !collapsed[groupBy + key], onClick: () => setCollapsed((old) => ({ ...old, [groupBy + key]: !old[groupBy + key] })) }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, collapsed[groupBy + key] ? "\u25B8" : "\u25BE"), " ", groupBy === "type" ? TYPE_LABELS[key] || key : key, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, items.length)))) : null, (groupBy === "none" || !collapsed[groupBy + key]) && items.map((entry) => /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: "cs-package-row", onClick: () => onSelect(entry.id) }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("button", { className: "cs-package", "aria-haspopup": "dialog", onClick: (e) => {
     e.stopPropagation();
     onSelect(entry.id);
-  } }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("span", { className: "cs-name" }, entry.name), /* @__PURE__ */ React.createElement("span", { className: "cs-description" }, entry.description)))), /* @__PURE__ */ React.createElement("td", null, TYPE_LABELS[entry.type] || entry.type), /* @__PURE__ */ React.createElement("td", null, entry.installedVersion || "\u2014"), /* @__PURE__ */ React.createElement("td", null, entry.revoked ? "\u2014" : entry.version), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry })), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(PackageStatus, { entry }))))))), !entries.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty" }, search || typeFilter ? "No matches. Try another search or package type." : tab === "updates" ? "No updates available in the current catalog." : tab === "installed" ? "No store packages are installed on this engine." : "No packages available. Check your sources and sync status in Settings.") : null), selected ? /* @__PURE__ */ React.createElement(ConfirmOverlay, { documentation: true, closeLabel: "Close package details", inactive: !!actions.overlay, title: selected.name, onCancel: () => onSelect(null) }, /* @__PURE__ */ React.createElement(DetailView, { key: selected.id, entry: selected, actions })) : null);
+  } }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("span", { className: "cs-name" }, entry.name), /* @__PURE__ */ React.createElement("span", { className: "cs-description" }, entry.description)))), /* @__PURE__ */ React.createElement("td", null, TYPE_LABELS[entry.type] || entry.type), /* @__PURE__ */ React.createElement("td", null, entry.installedVersion || "\u2014"), /* @__PURE__ */ React.createElement("td", null, entry.revoked ? "\u2014" : entry.version), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry })), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(StarCount, { entry })), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(PackageStatus, { entry }))))))), !entries.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty" }, search || typeFilter ? "No matches. Try another search or package type." : tab === "updates" ? "No updates available in the current catalog." : tab === "installed" ? "No store packages are installed on this engine." : "No packages available. Check your sources and sync status in Settings.") : null), selected ? /* @__PURE__ */ React.createElement(ConfirmOverlay, { documentation: true, closeLabel: "Close package details", inactive: !!actions.overlay, title: selected.name, onCancel: () => onSelect(null) }, /* @__PURE__ */ React.createElement(DetailView, { key: selected.id, entry: selected, actions })) : null);
 }
 function SettingsView({ catalog, onSaved }) {
   const [settings, setSettings] = React.useState(null);
@@ -2728,25 +2774,6 @@ function CommunityStoreView() {
   const [selectedId, setSelectedId] = React.useState(null);
   const [completion, setCompletion] = React.useState(null);
   const [staged, setStaged] = React.useState({});
-  const [downloads, setDownloads] = React.useState({});
-  React.useEffect(() => {
-    let cancelled = false;
-    setDownloads({});
-    async function load() {
-      for (const entry of catalog?.entries || []) {
-        if (cancelled) break;
-        try {
-          const stats = await apiGet(`${BASE}/catalog/${encodeURIComponent(entry.id)}/downloads`);
-          if (!cancelled) setDownloads((old) => ({ ...old, [entry.id]: stats }));
-        } catch {
-        }
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [catalog]);
   const request = React.useRef(0);
   const refresh = async (force) => {
     const current = ++request.current;
@@ -2773,7 +2800,7 @@ function CommunityStoreView() {
     setCompletion(result);
     if (result.restartRequired) setStaged((previous) => ({ ...previous, [result.entry.id]: result.entry.version }));
   });
-  const data = catalog ? { ...catalog, entries: (catalog.entries || []).map((entry) => ({ ...entry, stagedVersion: staged[entry.id], downloads: downloads[entry.id] })) } : null;
+  const data = catalog ? { ...catalog, entries: (catalog.entries || []).map((entry) => ({ ...entry, stagedVersion: staged[entry.id], downloads: entry.statistics?.downloads, stars: entry.statistics?.stars })) } : null;
   const visible = (data?.entries || []).filter((e) => e.installedVersion || e.stagedVersion || showsInWebUi(e));
   const counts = {
     browse: visible.filter((e) => !e.revoked).length,

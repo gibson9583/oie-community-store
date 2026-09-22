@@ -68,6 +68,7 @@ export const STORE_CSS = `
 .cs-store .cs-table { width:100%; border-collapse:separate; border-spacing:0; text-align:left; }
 .cs-store .cs-table th, .cs-store .cs-table td { padding:12px 16px; border-bottom:1px solid var(--line); font-size:12px; }
 .cs-store .cs-table thead th { position:sticky; top:0; z-index:1; background:var(--bg2); color:var(--text-dim); white-space:nowrap; }
+.cs-store .cs-sort-heading { border:0; padding:0; background:none; color:inherit; font:inherit; font-weight:600; cursor:pointer; text-align:left; width:100%; }
 .cs-store .cs-table td:first-child { width:52%; min-width:260px; }
 .cs-store .cs-table td:not(:first-child) { white-space:nowrap; }
 .cs-store .cs-package-row { background:var(--bg1); cursor:pointer; }

@@ -47,13 +47,41 @@ await test('type filtering, grouping and sorting retain access to details',async
 });
 await test('all-version downloads appear in table and details, including genuine zero',async()=>{
  for (const count of [0,12345]) {
-  const f=await fixture([sample()],{get:async(p,catalog)=>p.endsWith('/downloads')?{status:'available',count}:catalog});
-  try {assert.equal(document.querySelector('.cs-package-row td:nth-child(5)').textContent,count.toLocaleString());const fact=[...document.querySelectorAll('.cs-fact')].find(e=>e.textContent.includes('Downloads · all versions'));assert.equal(fact.querySelector('dd').textContent,count.toLocaleString());assert.match(fact.querySelector('[title]').title,/not an installation or user count/);} finally {await f.close();}
+  const f=await fixture([sample({statistics:{downloads:{status:'available',count},stars:{status:'available',count:0}}})],{get:async(p,catalog)=>{assert.ok(!p.endsWith('/downloads'));return catalog;}});
+  try {assert.equal(document.querySelector('.cs-package-row td:nth-child(5)').textContent,count.toLocaleString());const fact=[...document.querySelectorAll('.cs-fact')].find(e=>e.textContent.includes('Downloads · all versions'));assert.equal(fact.querySelector('dd span').textContent,count.toLocaleString());assert.match(fact.querySelector('[title]').title,/not an installation or user count/);} finally {await f.close();}
  }
 });
 await test('download lookup failure leaves package browsing and actions available',async()=>{
  const f=await fixture([sample()],{get:async(p,catalog)=>{if(p.endsWith('/downloads'))throw Error('Rate limited');return catalog;}});
  try{assert.equal(document.querySelector('.cs-package-row td:nth-child(5)').textContent,'—');assert.ok(f.button('Review update'));assert.equal(document.querySelector('[role="alert"]'),null);}finally{await f.close();}
+});
+await test('rate-limit reason is visible in download tooltip and details',async()=>{
+ const f=await fixture([sample({statistics:{downloads:{status:'unavailable',reason:'rate_limit_or_access_denied'}}})]);
+ try {assert.match(document.querySelector('.cs-package-row td:nth-child(5) span').title,/GitHub rate limit/);assert.match(document.querySelector('.cs-detail').textContent,/GitHub rate limit/);}finally{await f.close();}
+});
+await test('catalog stars and stale timestamps remain visible without statistics requests',async()=>{
+ const f=await fixture([sample({statistics:{stars:{status:'available',count:42,stale:true,checkedAt:'2026-09-22T10:00:00Z'}}})],{get:async(p,catalog)=>{assert.ok(!p.endsWith('/downloads'));return catalog;}});
+ try {assert.equal(document.querySelector('.cs-package-row td:nth-child(6)').textContent,'42 (stale)');assert.match(document.querySelector('.cs-package-row td:nth-child(6) span').title,/last successful count/);assert.match(document.querySelector('.cs-detail').textContent,/GitHub stars/);}finally{await f.close();}
+});
+await test('type is default; numeric column headers toggle and keep missing counts last',async()=>{
+ const metric=count=>({status:'available',count});
+ const f=await fixture([sample({id:'low',name:'Low',statistics:{downloads:metric(2),stars:metric(30)}}),sample({id:'high',name:'High',statistics:{downloads:metric(100),stars:metric(1)}}),sample({id:'zero',name:'Zero',statistics:{downloads:metric(0)}}),sample({id:'missing',name:'Missing'})],{closed:true});
+ try {
+  assert.equal(document.querySelector('[aria-label="Group packages"]').value,'type');
+  const names=()=>[...document.querySelectorAll('.cs-name')].map(e=>e.textContent);
+  const header=async index=>{await act(async()=>document.querySelectorAll('thead button')[index].click());};
+  await header(4);assert.deepEqual(names(),['High','Low','Zero','Missing']);assert.equal(document.querySelectorAll('thead th')[4].getAttribute('aria-sort'),'descending');
+  await header(4);assert.deepEqual(names(),['Zero','Low','High','Missing']);
+  await header(5);assert.deepEqual(names(),['Low','High','Missing','Zero']);
+  await header(0);assert.deepEqual(names(),['High','Low','Missing','Zero']);
+  assert.equal(document.querySelector('[aria-label="Sort packages"]').value,'name');
+ }finally{await f.close();}
+});
+await test('version columns sort numerically and grouping can be disabled for global ordering',async()=>{
+ const f=await fixture([sample({id:'two',name:'Two',version:'2.0.0',installedVersion:'2.0.0',type:'plugin'}),sample({id:'ten',name:'Ten',version:'10.0.0',installedVersion:'10.0.0',type:'connector'})],{closed:true});
+ try {const select=document.querySelector('[aria-label="Group packages"]');await act(async()=>{select.value='none';select.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ for(const i of [2,3]){await act(async()=>document.querySelectorAll('thead button')[i].click());assert.equal(document.querySelector('.cs-name').textContent,'Ten');await act(async()=>document.querySelectorAll('thead button')[i].click());assert.equal(document.querySelector('.cs-name').textContent,'Two');}
+ }finally{await f.close();}
 });
 await test('real Remove click uses removal endpoint and never install',async()=>{
  const f=await fixture([sample()]);try{await f.click('Remove from engine…');await f.click('Remove');assert.deepEqual(f.calls,[{p:'/extensions/communitystore/_removeContent',b:{id:'sample'}}]);}finally{await f.close();}

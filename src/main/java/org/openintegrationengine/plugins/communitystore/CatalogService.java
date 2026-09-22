@@ -104,7 +104,14 @@ public class CatalogService {
         return null;
     }
 
-    public ObjectNode getDownloads(String id) { return downloadCounts.get(findEntry(id)); }
+    public ObjectNode getDownloads(String id) {
+        ObjectNode entry = findEntry(id);
+        if (entry != null && entry.has("statistics")) {
+            JsonNode metric = entry.path("statistics").path("downloads");
+            return metric.isObject() ? (ObjectNode) metric.deepCopy() : MAPPER.createObjectNode().put("status", "unavailable").put("reason", "catalog_statistics_pending");
+        }
+        return downloadCounts.get(entry);
+    }
 
     /** Publisher docs are immutable per repo+tag, so cache entries never expire. */
     private final Map<String, ObjectNode> docsCache = new ConcurrentHashMap<>();
@@ -399,6 +406,8 @@ public class CatalogService {
         entry.put("type", type);
         entry.put("repo", displayRepo(repository));
         entry.put("repoUrl", repository);
+        // Index statistics are optional; missing data must not trigger per-engine GitHub requests.
+        entry.set("statistics", pkg.path("statistics").isObject() ? pkg.path("statistics").deepCopy() : MAPPER.createObjectNode());
         entry.put("tag", version);
         entry.put("version", version);
         entry.put("minEngineVersion", offered.path("minEngineVersion").asText(""));
