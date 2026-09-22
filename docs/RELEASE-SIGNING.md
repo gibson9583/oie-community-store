@@ -83,8 +83,8 @@ Run `python3 -m unittest discover -s .github/signing -p 'test_*.py' -v` with
 Python 3.10+, JDK 17+ and OpenSSL installed. The signing checks workflow runs the
 same tests on PRs. Keep `config.json` aligned with the assembly when adding or
 renaming plugin modules. These standalone signing helpers are shared by convention
-across Web Support, Sentinel, SQS, Community Store, OIDC and TOTP; apply common fixes
-to all six copies.
+across Web Support, Sentinel, SQS, Community Store, OIDC, TOTP and Thread Viewer;
+apply common fixes to all seven copies.
 
 References:
 
