@@ -1,5 +1,7 @@
 # Community Store
 
+Engine compatibility for the prepared 0.8.2 release: **OIE 4.6.0 and 4.7.0 only**. See the [release preparation notes](oie-4.6-4.7-release.md) for validation status.
+
 A community package store for Open Integration Engine with no project-hosted
 infrastructure: a curated **catalog** (a static, PR-reviewed index whose entries
 carry an artifact URL on any https host plus its sha256) is the primary source, and

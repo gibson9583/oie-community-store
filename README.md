@@ -1,5 +1,7 @@
 # OIE Community Store
 
+Release 0.8.2 is being prepared with engine compatibility limited to OIE **4.6.0 and 4.7.0**. Runtime validation on the final 4.7.0 release is pending; see the [release preparation notes](docs/oie-4.6-4.7-release.md).
+
 A community package store for [Open Integration Engine](https://openintegrationengine.org) with no project-hosted infrastructure. It distributes **extensions** (plugins, connectors, data types — built `.zip`s, installed through the engine's extension installer) and **content** (channels, code templates, code template libraries — XML exports, or plain `.js` files for code templates, imported through the engine's APIs, no restart). Packages come from two kinds of sources: the curated [community catalog](https://github.com/gibson9583/oie-community-catalog) — a static, PR-reviewed index whose entries carry an artifact URL on **any** https host plus its sha256 — and direct GitHub repository/organization crawls (HACS-style: an `oie.json` manifest per repo, artifacts on GitHub Releases) as the zero-setup publisher on-ramp. Either way the engine downloads, sha256-verifies, and installs everything itself.
 
 ## Administrator experience

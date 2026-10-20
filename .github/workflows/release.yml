@@ -32,6 +32,7 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       sha256: ${{ steps.pkg.outputs.sha256 }}
       minengine: ${{ steps.pkg.outputs.minengine }}
+      maxengine: ${{ steps.pkg.outputs.maxengine }}
       ui: ${{ steps.pkg.outputs.ui }}
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +146,7 @@ jobs:
           echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "out/${ASSET}.sha256")" >> "$GITHUB_OUTPUT"
           echo "minengine=$(jq -r '.minEngineVersion // "4.6.0"' oie.json)" >> "$GITHUB_OUTPUT"
+          echo "maxengine=$(jq -c '.maxEngineVersion // null' oie.json)" >> "$GITHUB_OUTPUT"
           echo "ui=$(jq -c '.ui // empty' oie.json)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release with assets
@@ -170,6 +172,7 @@ jobs:
       VERSION: ${{ needs.release.outputs.version }}
       SHA256: ${{ needs.release.outputs.sha256 }}
       MIN_ENGINE: ${{ needs.release.outputs.minengine }}
+      MAX_ENGINE_JSON: ${{ needs.release.outputs.maxengine }}
       UI: ${{ needs.release.outputs.ui }}
       GH_TOKEN: ${{ secrets.CATALOG_TOKEN }}
     steps:
@@ -196,7 +199,7 @@ jobs:
           {
               "version": "${VERSION}",
               "minEngineVersion": "${MIN_ENGINE}",
-              "maxEngineVersion": null,
+              "maxEngineVersion": ${MAX_ENGINE_JSON},
               "installerUrl": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/communitystore-${VERSION}.zip",
               "sha256": "${SHA256}",
               "restartRequired": true,
