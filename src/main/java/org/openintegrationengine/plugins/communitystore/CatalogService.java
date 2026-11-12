@@ -825,12 +825,15 @@ public class CatalogService {
                 JsonNode record = ledgerForVersions.get(entry.path("id").asText());
                 String ledgerVersion = record != null ? record.path("version").asText("") : "";
                 boolean offeredIsNewer = false;
+                boolean installedIsNewer = false;
                 if (present && !ledgerVersion.isEmpty()) {
                     SemVer current = SemVer.parse(ledgerVersion);
                     SemVer offered = SemVer.parse(entry.path("version").asText());
                     offeredIsNewer = current != null && offered != null && offered.compareTo(current) > 0
                             && entry.path("compatible").asBoolean(false);
+                    installedIsNewer = current != null && offered != null && current.compareTo(offered) > 0;
                 }
+                entry.put("installedNewer", installedIsNewer);
                 entry.put("installedVersion", present ? (!ledgerVersion.isEmpty() ? ledgerVersion : entry.path("version").asText()) : "");
                 if ("channel".equals(type)) {
                     // Channels are snapshot-only: never offered as an in-place update (the
@@ -874,12 +877,17 @@ public class CatalogService {
             String installedVersion = installed.get(entry.path("id").asText());
             entry.put("installedVersion", installedVersion == null ? "" : installedVersion);
             boolean updateAvailable = false;
+            // A newer version than the store offers (a pre-release, or a build installed from
+            // elsewhere) is still "installed", but both UIs show it apart from an up-to-date one.
+            boolean installedNewer = false;
             if (installedVersion != null) {
                 SemVer current = SemVer.parse(installedVersion);
                 SemVer offered = SemVer.parse(entry.path("version").asText());
                 updateAvailable = current != null && offered != null && offered.compareTo(current) > 0 && entry.path("compatible").asBoolean(false);
+                installedNewer = current != null && offered != null && current.compareTo(offered) > 0;
             }
             entry.put("updateAvailable", updateAvailable);
+            entry.put("installedNewer", installedNewer);
         }
 
         // Revocation: a package THIS store installed (see the install ledger) that is still
