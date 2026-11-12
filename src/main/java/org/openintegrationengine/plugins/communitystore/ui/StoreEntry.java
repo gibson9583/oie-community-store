@@ -51,6 +51,8 @@ class StoreEntry {
     boolean compatible;
     boolean installable;
     boolean updateAvailable;
+    /** The installed version is newer than the offered one. */
+    boolean installedNewer;
     boolean restartRequired;
     boolean deprecated;
     boolean revoked;
@@ -105,6 +107,7 @@ class StoreEntry {
         e.compatible = n.path("compatible").asBoolean(false);
         e.installable = n.path("installable").asBoolean(false);
         e.updateAvailable = n.path("updateAvailable").asBoolean(false);
+        e.installedNewer = n.path("installedNewer").asBoolean(false);
         e.restartRequired = n.path("restartRequired").asBoolean(false);
         e.deprecated = n.path("deprecated").asBoolean(false);
         e.revoked = n.path("revoked").asBoolean(false);
