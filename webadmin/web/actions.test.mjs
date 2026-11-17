@@ -119,4 +119,7 @@ await test('revoked installed packages remain visible in Installed',async()=>{
 await test('update filter only lists packages with updates',async()=>{
  const f=await fixture([sample(),sample({id:'other',name:'Other',updateAvailable:false})],{closed:true});try{await f.click('Updates');assert.equal(document.querySelectorAll('.cs-package').length,1);await f.click('Sample template');assert.equal(document.querySelector('.cs-detail h2').textContent,'Sample template');}finally{await f.close();}
 });
+await test('a newer installed version is marked apart from an up-to-date install',async()=>{
+ const f=await fixture([sample({id:'newer',name:'Newer build',type:'plugin',installedVersion:'2.1.0',updateAvailable:false,installedNewer:true}),sample({id:'current',name:'Current build',type:'plugin',installedVersion:'2.0.0',updateAvailable:false})],{closed:true});try{const newer=document.querySelector('.cs-pill.update');assert.ok(newer,'newer install uses the update (blue) pill');assert.equal(newer.textContent,'Installed (newer)');assert.match(newer.title,/2\.1\.0 is newer than the offered 2\.0\.0/);assert.equal(document.querySelectorAll('.cs-pill.ok').length,1,'the up-to-date install keeps the green pill');}finally{await f.close();}
+});
 } finally { await rm(temporary,{recursive:true,force:true}); }

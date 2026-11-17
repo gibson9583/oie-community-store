@@ -504,6 +504,7 @@ function PackageStatus({ entry }) {
     if (entry.updateAvailable) return <span className="cs-pill update">Update available</span>;
     if (!entry.compatible) return <span className="cs-pill warn">Incompatible</span>;
     if (entry.deprecated) return <span className="cs-pill warn">Deprecated</span>;
+    if (entry.installedVersion && entry.installedNewer) return <span className="cs-pill update" title={`Installed ${entry.installedVersion} is newer than the offered ${entry.version}`}>Installed (newer)</span>;
     if (entry.installedVersion) return <span className="cs-pill ok">Installed</span>;
     return <span className="cs-pill">Available to {isContentType(entry.type) ? 'import' : 'install'}</span>;
 }

@@ -2559,6 +2559,7 @@ function PackageStatus({ entry }) {
   if (entry.updateAvailable) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill update" }, "Update available");
   if (!entry.compatible) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Incompatible");
   if (entry.deprecated) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Deprecated");
+  if (entry.installedVersion && entry.installedNewer) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill update", title: `Installed ${entry.installedVersion} is newer than the offered ${entry.version}` }, "Installed (newer)");
   if (entry.installedVersion) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill ok" }, "Installed");
   return /* @__PURE__ */ React.createElement("span", { className: "cs-pill" }, "Available to ", isContentType(entry.type) ? "import" : "install");
 }

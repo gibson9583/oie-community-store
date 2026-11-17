@@ -88,7 +88,10 @@ class StoreEntryTableModel extends AbstractTableModel {
             return "blocked".equals(e.revokedReason) ? "Blocked by source" : "Removed from source";
         }
         if (e.isInstalled()) {
-            return e.updateAvailable ? "Update ↑ (" + e.version + ")" : "Installed " + e.installedVersion;
+            if (e.updateAvailable) {
+                return "Update ↑ (" + e.version + ")";
+            }
+            return "Installed " + e.installedVersion + (e.installedNewer ? " (newer)" : "");
         }
         if (!e.compatible) {
             return "Incompatible";
