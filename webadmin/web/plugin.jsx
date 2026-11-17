@@ -145,21 +145,21 @@ function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLab
         if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last.focus(); }
         else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog.current)) { event.preventDefault(); first.focus(); }
     };
-    return <div className="cs-overlay" style={inactive ? {display: 'none'} : undefined}>
-        <div className={`panel cs-dialog ${documentation ? 'cs-documentation-dialog' : ''}`}  role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialog} tabIndex={-1} onKeyDown={onKeyDown}>
-            <div className="panel-header" id={titleId}>{title}{documentation ? <button className="btn btn-sm" onClick={onCancel} aria-label={closeLabel}>Close</button> : null}</div>
-            <div className="panel-body">
+    return <div className="modal-overlay cs-overlay" style={inactive ? {display: 'none'} : undefined}>
+        <div className={`modal ${documentation ? 'wide cs-documentation-dialog' : 'cs-dialog'}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialog} tabIndex={-1} onKeyDown={onKeyDown}>
+            <div className="modal-header"><span id={titleId}>{title}</span>{documentation ? <button className="btn btn-sm btn-ghost cs-close" onClick={onCancel} aria-label={closeLabel}>Close</button> : null}</div>
+            <div className="modal-body">
                 {children}
                 {loading ? <p role="status">Loading libraries…</p> : null}
                 {error ? <p role="alert" className="cs-notice error">{error}</p> : null}
-                {!documentation ? <div className="cs-dialog-actions">
-                    <button className="btn" onClick={() => onCancel()} disabled={busy}>Cancel</button>
-                    {secondaryLabel ? <button className="btn btn-danger" onClick={() => onSecondary()} disabled={busy || loading}>{secondaryLabel}</button> : null}
-                    <button className="btn btn-primary" onClick={() => onConfirm()} disabled={busy || loading}>
-                        {busy ? 'Working…' : confirmLabel}
-                    </button>
-                </div> : null}
             </div>
+            {!documentation ? <div className="modal-foot">
+                <button className="btn" onClick={() => onCancel()} disabled={busy}>Cancel</button>
+                {secondaryLabel ? <button className="btn btn-danger" onClick={() => onSecondary()} disabled={busy || loading}>{secondaryLabel}</button> : null}
+                <button className="btn btn-primary" onClick={() => onConfirm()} disabled={busy || loading}>
+                    {busy ? 'Working…' : confirmLabel}
+                </button>
+            </div> : null}
         </div>
     </div>;
 }
@@ -399,13 +399,13 @@ function useStoreActions(refresh, onComplete) {
                                 <label className="flex items-center gap-2 mb-1" style={{ cursor: 'pointer' }}>
                                     <input type="radio" name="cs-lib" checked={libMode === 'new'} onChange={() => setLibMode('new')} />
                                     Create new library:
-                                    <input className="field" style={{ maxWidth: 220 }} value={newLib} placeholder="Library name"
+                                    <input aria-label="New library name" style={{ maxWidth: 220 }} value={newLib} placeholder="Library name"
                                         onFocus={() => setLibMode('new')} onChange={(e) => setNewLib(e.target.value)} />
                                 </label>
                                 <label className="flex items-center gap-2" style={{ cursor: libraries.length ? 'pointer' : 'default' }}>
                                     <input type="radio" name="cs-lib" checked={libMode === 'existing'} disabled={!libraries.length} onChange={() => setLibMode('existing')} />
                                     Existing library:
-                                    <select className="field" style={{ maxWidth: 220 }} value={existingLib} disabled={!libraries.length}
+                                    <select aria-label="Existing library" style={{ maxWidth: 220 }} value={existingLib} disabled={!libraries.length}
                                         onChange={(e) => { setExistingLib(e.target.value); setLibMode('existing'); }}>
                                         <option value="">{libraries.length ? 'Select a library…' : 'No libraries yet'}</option>
                                         {libraries.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -497,16 +497,22 @@ const TYPE_ICONS = {
 function PackageIcon({ type }) {
     return <span className="cs-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={TYPE_ICONS[type] || TYPE_ICONS.plugin} /></svg></span>;
 }
+// Every applicable state as its own host .tag, so a library with local edits AND an update shows both.
+function statusTags(entry) {
+    const tags = [];
+    if (entry.revoked) tags.push(['red', entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source']);
+    if (entry.stagedVersion) tags.push(['amber', 'Restart pending']);
+    if (entry.modified) tags.push(['amber', entry.driftTracked === false ? 'Changes unknown' : 'Locally modified']);
+    if (entry.updateAvailable && !entry.stagedVersion && !entry.revoked) tags.push(['accent', 'Update available']);
+    if (!entry.compatible && !entry.revoked) tags.push(['amber', 'Incompatible']);
+    if (entry.deprecated) tags.push(['amber', 'Deprecated']);
+    if (tags.length) return tags;
+    if (entry.installedVersion && entry.installedNewer) return [['accent', 'Installed (newer)', `Installed ${entry.installedVersion} is newer than the offered ${entry.version}`]];
+    if (entry.installedVersion) return [['ok', 'Installed']];
+    return [['', `Available to ${isContentType(entry.type) ? 'import' : 'install'}`]];
+}
 function PackageStatus({ entry }) {
-    if (entry.revoked) return <span className="cs-pill error">{entry.revokedReason === 'blocked' ? 'Blocked by source' : 'Removed from source'}</span>;
-    if (entry.stagedVersion) return <span className="cs-pill warn">Restart pending</span>;
-    if (entry.modified) return <span className="cs-pill warn">{entry.driftTracked === false ? 'Changes unknown' : 'Locally modified'}</span>;
-    if (entry.updateAvailable) return <span className="cs-pill update">Update available</span>;
-    if (!entry.compatible) return <span className="cs-pill warn">Incompatible</span>;
-    if (entry.deprecated) return <span className="cs-pill warn">Deprecated</span>;
-    if (entry.installedVersion && entry.installedNewer) return <span className="cs-pill update" title={`Installed ${entry.installedVersion} is newer than the offered ${entry.version}`}>Installed (newer)</span>;
-    if (entry.installedVersion) return <span className="cs-pill ok">Installed</span>;
-    return <span className="cs-pill">Available to {isContentType(entry.type) ? 'import' : 'install'}</span>;
+    return <span className="cs-tags">{statusTags(entry).map(([tone, label, title]) => <span key={label} className={`tag ${tone}`} title={title}>{label}</span>)}</span>;
 }
 function safeExternalUrl(value) {
     try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; }
@@ -550,37 +556,43 @@ function DetailView({ entry, actions }) {
         && (content || !entry.installedVersion || entry.updateAvailable);
     const label = channelCopy ? 'Import as copy' : update ? entry.updateAvailable ? `Review update to ${entry.version}` : 'Review re-import'
         : content ? 'Review import' : 'Review installation';
+    const target = entry.stagedVersion || (entry.updateAvailable && !entry.revoked ? entry.version : null);
     return <aside className="cs-detail" aria-label="Selected package">
-        <PackageIcon type={entry.type} />
-        <h2>{entry.name}</h2>
-        <div className="cs-meta">{TYPE_LABELS[entry.type] || entry.type}{entry.authors?.length ? ` · by ${entry.authors.join(', ')}` : ''}</div>
+        <div className="cs-detail-title"><PackageIcon type={entry.type} /><h2>{entry.name}</h2></div>
+        <div className="cs-meta">
+            <span>{TYPE_LABELS[entry.type] || entry.type}{entry.authors?.length ? ` · by ${entry.authors.join(', ')}` : ''}</span>
+            <PackageStatus entry={entry} />
+        </div>
         <p className="cs-detail-description">{entry.description || 'No description provided.'}</p>
-        <PackageStatus entry={entry} />
-        <p className="cs-footnote">{DOWNLOAD_NOTE} {entry.downloads?.status !== 'available' ? downloadError(entry) : ''}</p>
+        <section className="cs-decide" aria-label="Installation">
+            {entry.installedVersion && target ? <div className="cs-flow">{entry.installedVersion} <span aria-hidden="true">→</span> <span className="cs-flow-to">{target}</span>{entry.stagedVersion ? ' (staged)' : ''}</div> : null}
+            <dl className="cs-facts">
+                <div className="cs-fact"><dt>Installed version</dt><dd>{entry.installedVersion || 'Not installed'}</dd></div>
+                <div className="cs-fact"><dt>Offered version</dt><dd>{entry.revoked ? 'Unavailable' : entry.version}{entry.publishedAt && !entry.revoked ? <span className="cs-dim"> · {new Date(entry.publishedAt).toLocaleDateString()}</span> : null}</dd></div>
+                {entry.stagedVersion ? <div className="cs-fact"><dt>Staged version</dt><dd>{entry.stagedVersion}</dd></div> : null}
+                <div className="cs-fact"><dt>Engine compatibility</dt><dd>{entry.minEngineVersion || 'Unspecified'}{entry.maxEngineVersion ? ` – ${entry.maxEngineVersion}` : entry.minEngineVersion ? '+' : ''}</dd></div>
+                <div className="cs-fact"><dt>Source</dt><dd>{entry.source}</dd></div>
+                <div className="cs-fact"><dt>Artifact integrity</dt><dd>{entry.sha256 || entry.checksumUrl ? 'SHA-256 on install' : 'No published checksum'}</dd></div>
+            </dl>
+            {entry.revoked ? <p className="cs-notice error">This package is no longer offered by its source. Review whether you still trust it.</p>
+                : entry.stagedVersion ? <p className="cs-notice warn">Version {entry.stagedVersion} is staged. Restart the engine to activate it.</p>
+                : !entry.compatible ? <p className="cs-notice warn">No compatible version is available for this engine.</p>
+                : <p className="cs-notice">{content ? 'Imported content is available immediately. No restart needed.' : 'Engine restart required after installation.'}</p>}
+            {entry.modified ? <p className="cs-notice warn">{entry.driftTracked === false ? 'Local changes are unknown with the previous tracking format.' : 'Local edits detected.'} Review before replacing this content. You can keep your changes by importing a copy.</p> : null}
+            {entry.deprecated ? <p className="cs-notice warn">Deprecated by the publisher{entry.deprecationMessage ? `: ${entry.deprecationMessage}` : '.'}</p> : null}
+            {entry.newerSnapshot ? <p className="cs-notice">Newer snapshot available: {entry.newerSnapshot}. Import as a copy to keep the installed channel.</p> : null}
+            {actionable ? <button className="btn btn-primary cs-primary-action" disabled={actions.busy}
+                onClick={() => channelCopy ? actions.requestCopy(entry) : update ? actions.requestUpdate(entry) : actions.requestInstall(entry)}>{label}</button> : null}
+            <p className="cs-footnote">Community published. A checksum verifies artifact integrity, not publisher identity.</p>
+        </section>
         <dl className="cs-facts">
-            <div className="cs-fact"><dt>Offered version</dt><dd>{entry.revoked ? 'Unavailable' : entry.version}</dd></div>
-            <div className="cs-fact"><dt>Installed version</dt><dd>{entry.installedVersion || 'Not installed'}</dd></div>
-            {entry.stagedVersion ? <div className="cs-fact"><dt>Staged version</dt><dd>{entry.stagedVersion}</dd></div> : null}
-            <div className="cs-fact"><dt>Downloads · all versions</dt><dd><DownloadCount entry={entry} /><div className="cs-footnote">{metricFreshness(entry.downloads)}</div></dd></div>
+            <div className="cs-fact"><dt>Downloads · all versions</dt><dd><DownloadCount entry={entry} /><div className="cs-footnote">{entry.downloads?.status !== 'available' ? `${downloadError(entry)} ` : ''}{metricFreshness(entry.downloads)}</div></dd></div>
             <div className="cs-fact"><dt>GitHub stars</dt><dd><StarCount entry={entry} /><div className="cs-footnote">{metricFreshness(entry.stars)}</div></dd></div>
-            <div className="cs-fact"><dt>Engine compatibility</dt><dd>{entry.minEngineVersion || 'Unspecified'}{entry.maxEngineVersion ? ` – ${entry.maxEngineVersion}` : entry.minEngineVersion ? '+' : ''}</dd></div>
         </dl>
-        {entry.revoked ? <p className="cs-notice error">This package is no longer offered by its source. Review whether you still trust it.</p>
-            : entry.stagedVersion ? <p className="cs-notice warn">Version {entry.stagedVersion} is staged. Restart the engine to activate it.</p>
-            : !entry.compatible ? <p className="cs-notice warn">No compatible version is available for this engine.</p>
-            : <p className="cs-notice">{content ? 'Imported content is available immediately. No restart needed.' : 'Engine restart required after installation.'}</p>}
-        {entry.modified ? <p className="cs-notice warn">{entry.driftTracked === false ? 'Local changes are unknown with the previous tracking format.' : 'Local edits detected.'} Review before replacing this content. You can keep your changes by importing a copy.</p> : null}
-        {entry.deprecated ? <p className="cs-notice warn">Deprecated by the publisher{entry.deprecationMessage ? `: ${entry.deprecationMessage}` : '.'}</p> : null}
-        {entry.newerSnapshot ? <p className="cs-notice">Newer snapshot available: {entry.newerSnapshot}. Import as a copy to keep the installed channel.</p> : null}
-        {actionable ? <button className="btn btn-primary cs-primary-action" disabled={actions.busy}
-            onClick={() => channelCopy ? actions.requestCopy(entry) : update ? actions.requestUpdate(entry) : actions.requestInstall(entry)}>{label}</button> : null}
-        <p className="cs-footnote">Community published. A checksum verifies artifact integrity, not publisher identity.</p>
+        <p className="cs-footnote">{DOWNLOAD_NOTE}</p>
         <details className="cs-package-info"><summary>Package information</summary><dl className="cs-facts">
             <div className="cs-fact"><dt>License</dt><dd>{entry.license || 'Unspecified'}</dd></div>
             <div className="cs-fact"><dt>Repository</dt><dd><ExternalLink href={entry.repoUrl || `https://github.com/${entry.repo}`}>{entry.repo || 'Repository'}</ExternalLink></dd></div>
-            <div className="cs-fact"><dt>Source</dt><dd>{entry.source}</dd></div>
-            <div className="cs-fact"><dt>Artifact integrity</dt><dd>{entry.sha256 || entry.checksumUrl ? 'SHA-256 on install' : 'No published checksum'}</dd></div>
-            {entry.publishedAt ? <div className="cs-fact"><dt>Published</dt><dd>{new Date(entry.publishedAt).toLocaleDateString()}</dd></div> : null}
             {!entry.offeredIsLatest && entry.latestTag ? <div className="cs-fact"><dt>Latest release</dt><dd>{entry.latestTag} (offering the compatible version)</dd></div> : null}
         </dl></details>
         <div className="cs-detail-links">
@@ -591,7 +603,7 @@ function DetailView({ entry, actions }) {
             <button className="btn cs-docs-toggle" aria-expanded={docsOpen} onClick={() => setDocsOpen(!docsOpen)}>{docsOpen ? 'Hide publisher documentation' : 'Read publisher documentation'}</button>
             {docsOpen ? <DocsPanel entry={entry} /> : null}
         </> : null}
-        {entry.installedVersion ? <div className="cs-facts">
+        {entry.installedVersion ? <div className="cs-manage">
             {content && entry.type !== 'channel' && canRemove() ? <button className="btn btn-danger" disabled={actions.busy} onClick={() => actions.requestRemove(entry)}>Remove from engine…</button>
                 : <p className="cs-footnote">{entry.type === 'channel' ? 'Manage or delete this channel in Channels.' : 'Manage or uninstall this package in Extensions.'}</p>}
         </div> : null}
@@ -604,7 +616,25 @@ function statusGroup(e) {
     return e.installedVersion ? 'Installed' : 'Available';
 }
 const STATUS_ORDER = ['Restart pending', 'Needs attention', 'Updates available', 'Installed', 'Available'];
-const SORT_COLUMNS = [['name','Package'],['type','Type'],['installedVersion','Installed'],['version','Available'],['downloads','Downloads'],['stars','Stars'],['status','Status']];
+// Canonical column order. Package is pinned first and takes the remaining width; the
+// rest can be hidden, reordered and resized like the dashboard (right-click a header).
+const COLUMNS = [
+    { key: 'name', label: 'Package', pinned: true },
+    { key: 'type', label: 'Type' },
+    { key: 'author', label: 'Author' },
+    { key: 'repo', label: 'Repository' },
+    { key: 'installedVersion', label: 'Installed', mono: true },
+    { key: 'version', label: 'Offered', mono: true },
+    { key: 'publishedAt', label: 'Published' },
+    { key: 'downloads', label: 'Downloads', num: true },
+    { key: 'stars', label: 'Stars', num: true },
+    { key: 'status', label: 'Status' },
+];
+const DATA_COLUMN_KEYS = COLUMNS.filter(c => !c.pinned).map(c => c.key);
+const COLUMN_WIDTHS = { type: 150, author: 150, repo: 220, installedVersion: 100, version: 100, publishedAt: 110, downloads: 110, stars: 80, status: 230 };
+const DEFAULT_HIDDEN_COLUMNS = ['author', 'repo', 'publishedAt'];
+const PACKAGE_MIN_WIDTH = 280;
+const DESCENDING_FIRST = ['downloads', 'stars', 'installedVersion', 'version', 'publishedAt'];
 function comparePackages(a, b, key, direction) {
     const value = entry => {
         if (key === 'downloads' || key === 'stars') {
@@ -613,6 +643,8 @@ function comparePackages(a, b, key, direction) {
         }
         if (key === 'type') return typeRank(entry.type);
         if (key === 'status') return STATUS_ORDER.indexOf(statusGroup(entry));
+        if (key === 'author') return entry.authors?.join(', ') || null;
+        if (key === 'publishedAt') { const t = Date.parse(entry.publishedAt); return Number.isNaN(t) ? null : t; }
         if (key === 'version' && entry.revoked) return null;
         return entry[key] || null;
     };
@@ -623,22 +655,83 @@ function comparePackages(a, b, key, direction) {
     const compared = x == null ? 0 : typeof x === 'number' ? x-y : x.localeCompare(y, undefined, {numeric:true, sensitivity:'base'});
     return compared * (direction === 'desc' ? -1 : 1) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 }
+function PackageCell({ column, entry, onSelect }) {
+    switch (column.key) {
+        case 'name': return <button className="cs-package" aria-haspopup="dialog" onClick={e => {e.stopPropagation();onSelect(entry.id);}}><PackageIcon type={entry.type} /><span className="cs-name">{entry.name}</span><span className="cs-description">{entry.description}</span></button>;
+        case 'type': return TYPE_LABELS[entry.type] || entry.type;
+        case 'author': return entry.authors?.join(', ') || '—';
+        case 'repo': return entry.repo || '—';
+        case 'installedVersion': return entry.installedVersion || '—';
+        case 'version': return entry.revoked ? '—' : entry.version;
+        case 'publishedAt': return entry.publishedAt ? new Date(entry.publishedAt).toLocaleDateString() : '—';
+        case 'downloads': return <DownloadCount entry={entry} />;
+        case 'stars': return <StarCount entry={entry} />;
+        case 'status': return <PackageStatus entry={entry} />;
+        default: return null;
+    }
+}
 function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
     const [search, setSearch] = React.useState('');
     const [typeFilter, setTypeFilter] = React.useState('');
     const [groupBy, setGroupBy] = React.useState(() => getPref('groupBy', 'type'));
     const [sortBy, setSortBy] = React.useState(() => getPref('sortBy', 'name'));
     const [sortDirection, setSortDirection] = React.useState(() => getPref('sortDirection', 'asc'));
-    const changeSort = (key, toggle = false) => {
-        const direction = toggle && key === sortBy ? (sortDirection === 'asc' ? 'desc' : 'asc') : ['downloads','stars','installedVersion','version'].includes(key) ? 'desc' : 'asc';
+    const changeSort = (key) => {
+        const direction = key === sortBy ? (sortDirection === 'asc' ? 'desc' : 'asc') : DESCENDING_FIRST.includes(key) ? 'desc' : 'asc';
         setSortBy(key); setSortDirection(direction); setPref('sortBy',key); setPref('sortDirection',direction);
+    };
+    const changeGroup = (value) => { setGroupBy(value); setPref('groupBy', value); };
+    // Column order, widths and visibility persist through the host's column manager
+    // (per engine and user), the same store the dashboard uses.
+    const columns = React.useRef(null);
+    if (!columns.current) columns.current = platform.columns.createColumnManager('communitystore', COLUMN_WIDTHS, DEFAULT_HIDDEN_COLUMNS);
+    const manager = columns.current;
+    const [, redraw] = React.useReducer(x => x + 1, 0);
+    const colRefs = React.useRef({});
+    // A resize that ends over its own header would also click it; ignore that click.
+    const resized = React.useRef(false);
+    const visibleColumns = [COLUMNS[0], ...manager.order(DATA_COLUMN_KEYS).filter(k => !manager.isHidden(k)).map(k => COLUMNS.find(c => c.key === k))];
+    const minWidth = visibleColumns.reduce((sum, c) => sum + (c.pinned ? PACKAGE_MIN_WIDTH : manager.width(c.key)), 0);
+    const columnMenu = (x, y) => {
+        const items = COLUMNS.filter(c => !c.pinned).map(c => {
+            const shown = !manager.isHidden(c.key);
+            return { label: `${shown ? '✓  ' : '     '}${c.label}`, onClick: () => { manager.setHidden(c.key, shown); redraw(); } };
+        });
+        items.push('-', { label: 'Restore Default', onClick: () => { manager.reset(); redraw(); } });
+        platform.ui.contextMenu(x, y, items);
+    };
+    const moveColumn = (from, to) => {
+        if (!from || from === to || !DATA_COLUMN_KEYS.includes(from)) return;
+        const next = manager.order(DATA_COLUMN_KEYS).filter(k => k !== from);
+        const index = DATA_COLUMN_KEYS.includes(to) ? next.indexOf(to) : 0;
+        next.splice(index, 0, from);
+        manager.setOrder(next);
+        redraw();
+    };
+    const startResize = (event, key) => {
+        event.preventDefault(); event.stopPropagation();
+        const startX = event.clientX, col = colRefs.current[key], startWidth = manager.width(key);
+        document.body.style.cursor = 'col-resize';
+        const move = e => { if (col) col.style.width = Math.max(40, startWidth + e.clientX - startX) + 'px'; };
+        const up = e => {
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', up);
+            document.body.style.cursor = '';
+            resized.current = true;
+            setTimeout(() => { resized.current = false; });
+            manager.setWidth(key, startWidth + e.clientX - startX);
+            redraw();
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
     };
     const [collapsed, setCollapsed] = React.useState({});
     const visible = (catalog.entries || []).filter(e => e.installedVersion || e.stagedVersion || showsInWebUi(e));
+    const query = search.trim().toLowerCase();
     const entries = visible.filter(e => (tab === 'installed' ? e.installedVersion || e.stagedVersion
         : tab === 'updates' ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked)
         && (!typeFilter || e.type === typeFilter)
-        && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
+        && `${e.name} ${e.id} ${e.description} ${e.repo} ${TYPE_LABELS[e.type] || e.type} ${(e.authors || []).join(' ')} ${(e.keywords || []).join(' ')}`.toLowerCase().includes(query))
         .sort((a,b) => comparePackages(a,b,sortBy,sortDirection));
     const types = [...new Set(visible.map(e => e.type))].sort((a,b) => typeRank(a) - typeRank(b));
     const groups = new Map();
@@ -651,24 +744,43 @@ function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
     const selected = visible.find(e => e.id === selectedId);
     return <div className="cs-catalog">
         <div className="cs-toolbar">
-            <label className="cs-search"><input className="field" aria-label="Search packages" placeholder="Search community packages…" value={search} onChange={e => setSearch(e.target.value)} /></label>
-            <select className="field" aria-label="Package type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">All package types</option>{types.map(type => <option key={type} value={type}>{TYPE_LABELS[type] || type}</option>)}</select>
-            <select className="field" aria-label="Group packages" value={groupBy} onChange={e => {setGroupBy(e.target.value);setPref('groupBy',e.target.value);}}><option value="status">Group by status</option><option value="type">Group by type</option><option value="none">No grouping</option></select>
-            <select className="field" aria-label="Sort packages" value={sortBy} onChange={e => changeSort(e.target.value)}>{SORT_COLUMNS.map(([key,label]) => <option key={key} value={key}>Sort by {label.toLowerCase()}</option>)}</select>
-            <button className="btn btn-sm" aria-label="Reverse sort direction" onClick={() => changeSort(sortBy,true)}>{sortDirection === 'asc' ? 'Ascending ↑' : 'Descending ↓'}</button>
+            <div className="cs-search">
+                <input aria-label="Search packages" placeholder="Search name, author, repository or keyword…" value={search} onChange={e => setSearch(e.target.value)} />
+                {search ? <button className="btn btn-sm btn-ghost cs-search-clear" aria-label="Clear search" onClick={() => setSearch('')}>✕</button> : null}
+            </div>
+            <select aria-label="Package type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">All package types</option>{types.map(type => <option key={type} value={type}>{TYPE_LABELS[type] || type}</option>)}</select>
+            <div className="segpill" role="group" aria-label="Group packages">
+                {[['status','By status'],['type','By type'],['none','No grouping']].map(([value,label]) => <button key={value} className={groupBy === value ? 'on' : undefined} aria-pressed={groupBy === value} onClick={() => changeGroup(value)}>{label}</button>)}
+            </div>
+            <button className="btn btn-sm" aria-haspopup="menu" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); columnMenu(r.left, r.bottom + 4); }}>Columns</button>
             <span className="cs-result-count" role="status">{entries.length} package{entries.length === 1 ? '' : 's'}</span>
         </div>
-        <div className="cs-workspace" tabIndex={0} aria-label="Package list">
-            <table className="cs-table"><thead><tr>{SORT_COLUMNS.map(([key,label]) => <th key={key} scope="col" aria-sort={sortBy === key ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}><button className="cs-sort-heading" onClick={() => changeSort(key,true)} title={key === 'downloads' ? DOWNLOAD_NOTE : `Sort by ${label.toLowerCase()}`}>{label}<span aria-hidden="true">{sortBy === key ? sortDirection === 'asc' ? ' ↑' : ' ↓' : ' ↕'}</span></button></th>)}</tr></thead>
-                {orderedGroups.map(([key, items]) => <tbody key={key}>
-                    {groupBy !== 'none' ? <tr className="cs-group"><th colSpan={7} scope="rowgroup"><button aria-expanded={!collapsed[groupBy+key]} onClick={() => setCollapsed(old => ({...old,[groupBy+key]:!old[groupBy+key]}))}><span aria-hidden="true">{collapsed[groupBy+key] ? '▸' : '▾'}</span> {groupBy === 'type' ? TYPE_LABELS[key] || key : key} <span className="cs-count">{items.length}</span></button></th></tr> : null}
-                    {(groupBy === 'none' || !collapsed[groupBy+key]) && items.map(entry => <tr key={entry.id} className="cs-package-row" onClick={() => onSelect(entry.id)}>
-                        <td><button className="cs-package" aria-haspopup="dialog" onClick={e => {e.stopPropagation();onSelect(entry.id);}}><PackageIcon type={entry.type} /><span><span className="cs-name">{entry.name}</span><span className="cs-description">{entry.description}</span></span></button></td>
-                        <td>{TYPE_LABELS[entry.type] || entry.type}</td><td>{entry.installedVersion || '—'}</td><td>{entry.revoked ? '—' : entry.version}</td><td><DownloadCount entry={entry} /></td><td><StarCount entry={entry} /></td><td><PackageStatus entry={entry} /></td>
-                    </tr>)}
-                </tbody>)}
-            </table>
-            {!entries.length ? <div className="cs-empty">{search || typeFilter ? 'No matches. Try another search or package type.' : tab === 'updates' ? 'No updates available in the current catalog.' : tab === 'installed' ? 'No store packages are installed on this engine.' : 'No packages available. Check your sources and sync status in Settings.'}</div> : null}
+        <div className="panel cs-grid">
+            <div className="dt-wrap" tabIndex={0} aria-label="Package list">
+                <table className="dt dt-resizable cs-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: minWidth + 'px' }}>
+                    <colgroup>{visibleColumns.map(c => <col key={c.key} ref={el => { colRefs.current[c.key] = el; }} style={c.pinned ? undefined : { width: manager.width(c.key) + 'px' }} />)}</colgroup>
+                    <thead><tr onContextMenu={e => { e.preventDefault(); columnMenu(e.clientX, e.clientY); }}>{visibleColumns.map(c => <th key={c.key} scope="col" className="sortable" tabIndex={0}
+                        aria-sort={sortBy === c.key ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}
+                        title={c.key === 'downloads' ? DOWNLOAD_NOTE : `Sort by ${c.label.toLowerCase()}. Right-click to choose columns.`}
+                        style={c.num ? { textAlign: 'right' } : undefined}
+                        draggable={!c.pinned}
+                        onDragStart={e => e.dataTransfer.setData('text/plain', c.key)}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => { e.preventDefault(); moveColumn(e.dataTransfer.getData('text/plain'), c.key); }}
+                        onClick={() => { if (!resized.current) changeSort(c.key); }}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeSort(c.key); } }}>
+                        {c.label}{sortBy === c.key ? <span className="sort-arrow" aria-hidden="true">{sortDirection === 'asc' ? '▲' : '▼'}</span> : null}
+                        {!c.pinned ? <div className="col-resize" onMouseDown={e => startResize(e, c.key)} onClick={e => e.stopPropagation()} /> : null}
+                    </th>)}</tr></thead>
+                    {orderedGroups.map(([key, items]) => <tbody key={key}>
+                        {groupBy !== 'none' ? <tr className="group-row cs-group"><td colSpan={visibleColumns.length}><button className="cs-group-toggle" aria-expanded={!collapsed[groupBy+key]} onClick={() => setCollapsed(old => ({...old,[groupBy+key]:!old[groupBy+key]}))}><span aria-hidden="true">{collapsed[groupBy+key] ? '▸' : '▾'}</span> {groupBy === 'type' ? TYPE_LABELS[key] || key : key} <span className="cs-count">{items.length}</span></button></td></tr> : null}
+                        {(groupBy === 'none' || !collapsed[groupBy+key]) && items.map(entry => <tr key={entry.id} className={`cs-package-row${entry.id === selectedId ? ' selected' : ''}`} onClick={() => onSelect(entry.id)}>
+                            {visibleColumns.map(c => <td key={c.key} data-column={c.key} className={c.num ? 'num' : c.mono ? 'mono' : undefined}><PackageCell column={c} entry={entry} onSelect={onSelect} /></td>)}
+                        </tr>)}
+                    </tbody>)}
+                </table>
+                {!entries.length ? <div className="dt-empty">{search || typeFilter ? 'No matches. Try another search or package type.' : tab === 'updates' ? 'No updates available in the current catalog.' : tab === 'installed' ? 'No store packages are installed on this engine.' : 'No packages available. Check your sources and sync status in Settings.'}</div> : null}
+            </div>
         </div>
         {selected ? <ConfirmOverlay documentation closeLabel="Close package details" inactive={!!actions.overlay} title={selected.name} onCancel={() => onSelect(null)}><DetailView key={selected.id} entry={selected} actions={actions} /></ConfirmOverlay> : null}
     </div>;
@@ -761,15 +873,15 @@ function SettingsView({ catalog, onSaved }) {
                         </tbody>
                     </table>
                     <div className="flex gap-2 items-center mt-3">
-                        <select className="field" style={{ maxWidth: 110 }} value={newKind} onChange={(e) => setNewKind(e.target.value)}>
+                        <select aria-label="Source kind" style={{ maxWidth: 110 }} value={newKind} onChange={(e) => setNewKind(e.target.value)}>
                             <option value="repo">repo</option>
                             <option value="org">org</option>
                             <option value="catalog">catalog</option>
                         </select>
-                        <input className="field" style={{ maxWidth: newKind === 'catalog' ? 380 : 260 }} value={newValue} onChange={(e) => setNewValue(e.target.value)}
+                        <input aria-label="Source" style={{ maxWidth: newKind === 'catalog' ? 380 : 260 }} value={newValue} onChange={(e) => setNewValue(e.target.value)}
                             placeholder={newKind === 'catalog' ? 'https://…/index.json' : newKind === 'org' ? 'organization or user login' : 'owner/repository'} />
                         {newKind === 'org' ? (
-                            <input className="field" style={{ maxWidth: 160 }} value={newTopic} onChange={(e) => setNewTopic(e.target.value)}
+                            <input aria-label="Topic filter" style={{ maxWidth: 160 }} value={newTopic} onChange={(e) => setNewTopic(e.target.value)}
                                 placeholder="topic filter" />
                         ) : null}
                         <button className="btn" onClick={addSource}>Add source</button>
@@ -793,7 +905,7 @@ function SettingsView({ catalog, onSaved }) {
                         </div>
                     ))}
                     <div className="flex gap-2 items-center mt-2">
-                        <input className="field" style={{ maxWidth: 260 }} value={newBlock} onChange={(e) => setNewBlock(e.target.value)} placeholder="owner/repository" />
+                        <input aria-label="Repository to block" style={{ maxWidth: 260 }} value={newBlock} onChange={(e) => setNewBlock(e.target.value)} placeholder="owner/repository" />
                         <button className="btn" onClick={() => {
                             const value = newBlock.trim().toLowerCase();
                             if (value) setSettings({ ...settings, localBlocklist: [...settings.localBlocklist, value] });
@@ -812,7 +924,7 @@ function SettingsView({ catalog, onSaved }) {
                         Include pre-releases (beta channel)
                     </label>
                     <div className="flex gap-2 items-center">
-                        <input className="field" type="password" style={{ maxWidth: 340 }}
+                        <input aria-label="GitHub personal access token" type="password" style={{ maxWidth: 340 }}
                             placeholder={settings.tokenSet ? 'Token configured (leave blank to keep, save empty to clear)' : 'Personal access token (optional)'}
                             value={token === null ? '' : token}
                             onChange={(e) => setToken(e.target.value)} />
@@ -874,14 +986,12 @@ function CommunityStoreView() {
         <style>{STORE_CSS}</style>
         {actions.overlay}
         <div className="cs-header">
-            <header className="cs-heading">
-                <div><h1>Community Store</h1><p>Extend your engine. Make it your own.</p></div>
-                <div className="cs-sync"><button className="btn" onClick={() => refresh(true)} disabled={loading || actions.busy}>{loading ? 'Syncing…' : '↻ Sync sources'}</button><div>{catalog ? `Engine ${catalog.engineVersion} · Synced ${new Date(catalog.generatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : 'Connecting to engine'}</div></div>
-            </header>
-            <nav className="cs-tabs" aria-label="Community Store views">
+            <nav className="tabs cs-tabs" aria-label="Community Store views">
                 {[['browse','Discover'],['installed','Installed'],['updates','Updates'], ...(canEditSettings() ? [['settings','Settings']] : [])].map(([id,label]) =>
-                    <button key={id} className={`cs-tab ${tab === id ? 'active' : ''}`} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}{id !== 'settings' && data ? <span className="cs-count">{counts[id]}</span> : null}</button>)}
+                    <button key={id} className={`tab ${tab === id ? 'active' : ''}`} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}{id !== 'settings' && data ? <span className="cs-count">{counts[id]}</span> : null}</button>)}
             </nav>
+            <button className="btn btn-sm" onClick={() => refresh(true)} disabled={loading || actions.busy}>{loading ? 'Syncing…' : '↻ Sync sources'}</button>
+            <span className="cs-sync">{catalog ? `Engine ${catalog.engineVersion} · Synced ${new Date(catalog.generatedAt).toLocaleString()}` : 'Connecting to engine'}</span>
         </div>
         <div className="view-body cs-body">
             {error ? <div className="cs-notice error" role="alert">Could not load the catalog: {error} <button className="btn btn-sm" onClick={() => refresh(true)} disabled={loading}>Retry</button></div> : null}
