@@ -7,7 +7,9 @@ import {pathToFileURL, fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
 import {JSDOM} from 'jsdom';
 import React, {act} from 'react';
-import {createRoot} from 'react-dom/client';
+// react-dom picks its input-event strategy when it loads, so give it a DOM first.
+const bootstrap=new JSDOM('<!doctype html>');globalThis.window=bootstrap.window;globalThis.document=bootstrap.window.document;
+const {createRoot}=await import('react-dom/client');
 
 const temporary = await mkdtemp(path.join(tmpdir(), 'community-store-tests-'));
 const bundle = path.join(temporary,'store.mjs');
@@ -15,6 +17,11 @@ await build({entryPoints:[fileURLToPath(new URL('./plugin.jsx',import.meta.url))
     name:'test-shell',setup(build){build.onResolve({filter:/^@oie\/web-shell$/},()=>({path:'shell',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const platform = globalThis.storeTestPlatform;'}));}
 }]});
 let sequence=0;
+// In-memory stand-in for the host's platform.columns.createColumnManager (same interface).
+const columnManager=(key,defaults,defaultHidden=[])=>{let order=null,widths={},hidden=new Set(defaultHidden);return{
+    order(present){if(!order)return present.slice();const out=order.filter(k=>present.includes(k));for(const k of present)if(!out.includes(k))out.push(k);return out;},
+    width:k=>widths[k]??defaults[k]??120,setWidth(k,w){widths[k]=Math.max(40,Math.round(w));},setOrder(keys){order=keys.slice();},
+    isHidden:k=>hidden.has(k),setHidden(k,v){if(v)hidden.add(k);else hidden.delete(k);},reset(){order=null;widths={};hidden=new Set(defaultHidden);}};};
 const sample = (extra={}) => ({id:'sample',name:'Sample template',description:'Example content',type:'code-template',version:'2.0.0',tag:'v2.0.0',installedVersion:'1.0.0',expectedContentHash:'reviewed-state',compatible:true,installable:true,updateAvailable:true,repo:'owner/sample',authors:['Community'],...extra});
 async function fixture(entries, options={}) {
     const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:'https://engine.test/'});
@@ -22,7 +29,8 @@ async function fixture(entries, options={}) {
     globalThis.Event=dom.window.Event; globalThis.IS_REACT_ACT_ENVIRONMENT=true;
     const calls=[]; let Component;
     const catalog={engineVersion:'4.6.0',generatedAt:Date.now(),entries,errors:options.errors||[]};
-    globalThis.storeTestPlatform={React,checkTask:()=>!options.readOnly,ui:{toast(){}},reactView:c=>c,registerNavItem(){},registerView(_p,c){Component=c;},api:{
+    const menus=[];
+    globalThis.storeTestPlatform={React,checkTask:()=>!options.readOnly,ui:{toast(){},contextMenu(x,y,items){menus.push(items);}},columns:{createColumnManager:columnManager},reactView:c=>c,registerNavItem(){},registerView(_p,c){Component=c;},api:{
         get:async p=>options.get?options.get(p,catalog):p.includes('/catalog')?catalog:{list:{codeTemplateLibrary:[{id:'lib',name:'Existing library'}]}},
         post:async(p,b)=>{calls.push({p,b});return options.post?options.post(p,b):{restartRequired:options.restart||false};},put:async()=>({})
     }};
@@ -33,7 +41,10 @@ async function fixture(entries, options={}) {
     const button=text=>buttons().find(b=>b.textContent.trim()===text)||buttons().find(b=>b.textContent.includes(text));
     const click=async text=>{const b=button(text);assert.ok(b,`button ${text} exists`);await act(async()=>b.click());return b;};
     if (!options.closed && document.querySelector('.cs-package')) await act(async()=>document.querySelector('.cs-package').click());
-    return {calls,click,button,buttons,catalog,async close(){await act(async()=>root.unmount());dom.window.close();}};
+    const headers=()=>[...document.querySelectorAll('thead th')].map(th=>th.firstChild.textContent);
+    const header=async label=>{const th=[...document.querySelectorAll('thead th')].find(t=>t.firstChild.textContent===label);assert.ok(th,`header ${label} exists`);await act(async()=>th.click());return th;};
+    const cell=(column,row=0)=>document.querySelectorAll(`.cs-package-row td[data-column="${column}"]`)[row];
+    return {calls,click,button,buttons,catalog,menus,headers,header,cell,async close(){await act(async()=>root.unmount());dom.window.close();}};
 }
 try {
 await test('package modal shows documentation and restores row focus on close',async()=>{
@@ -43,44 +54,43 @@ await test('package modal shows documentation and restores row focus on close',a
 await test('type filtering, grouping and sorting retain access to details',async()=>{
  const f=await fixture([sample(),sample({id:'connector',name:'Z connector',type:'connector'})],{closed:true});
  const select=async(label,value)=>{const el=document.querySelector(`[aria-label="${label}"]`);await act(async()=>{el.value=value;el.dispatchEvent(new window.Event('change',{bubbles:true}));});};
- try{await select('Group packages','none');await select('Sort packages','type');assert.match(document.querySelector('.cs-package').textContent,/Z connector/);await select('Group packages','type');assert.equal(document.querySelectorAll('.cs-group').length,2);await select('Package type','connector');assert.equal(document.querySelectorAll('.cs-package').length,1);await f.click('Z connector');assert.match(document.querySelector('[role="dialog"]').textContent,/Z connector/);}finally{await f.close();}
+ try{await f.click('No grouping');await f.header('Type');assert.match(document.querySelector('.cs-package').textContent,/Z connector/);await f.click('By type');assert.equal(document.querySelectorAll('.cs-group').length,2);await select('Package type','connector');assert.equal(document.querySelectorAll('.cs-package').length,1);await f.click('Z connector');assert.match(document.querySelector('[role="dialog"]').textContent,/Z connector/);}finally{await f.close();}
 });
 await test('all-version downloads appear in table and details, including genuine zero',async()=>{
  for (const count of [0,12345]) {
   const f=await fixture([sample({statistics:{downloads:{status:'available',count},stars:{status:'available',count:0}}})],{get:async(p,catalog)=>{assert.ok(!p.endsWith('/downloads'));return catalog;}});
-  try {assert.equal(document.querySelector('.cs-package-row td:nth-child(5)').textContent,count.toLocaleString());const fact=[...document.querySelectorAll('.cs-fact')].find(e=>e.textContent.includes('Downloads · all versions'));assert.equal(fact.querySelector('dd span').textContent,count.toLocaleString());assert.match(fact.querySelector('[title]').title,/not an installation or user count/);} finally {await f.close();}
+  try {assert.equal(f.cell('downloads').textContent,count.toLocaleString());const fact=[...document.querySelectorAll('.cs-fact')].find(e=>e.textContent.includes('Downloads · all versions'));assert.equal(fact.querySelector('dd span').textContent,count.toLocaleString());assert.match(fact.querySelector('[title]').title,/not an installation or user count/);} finally {await f.close();}
  }
 });
 await test('download lookup failure leaves package browsing and actions available',async()=>{
  const f=await fixture([sample()],{get:async(p,catalog)=>{if(p.endsWith('/downloads'))throw Error('Rate limited');return catalog;}});
- try{assert.equal(document.querySelector('.cs-package-row td:nth-child(5)').textContent,'—');assert.ok(f.button('Review update'));assert.equal(document.querySelector('[role="alert"]'),null);}finally{await f.close();}
+ try{assert.equal(f.cell('downloads').textContent,'—');assert.ok(f.button('Review update'));assert.equal(document.querySelector('[role="alert"]'),null);}finally{await f.close();}
 });
 await test('rate-limit reason is visible in download tooltip and details',async()=>{
  const f=await fixture([sample({statistics:{downloads:{status:'unavailable',reason:'rate_limit_or_access_denied'}}})]);
- try {assert.match(document.querySelector('.cs-package-row td:nth-child(5) span').title,/GitHub rate limit/);assert.match(document.querySelector('.cs-detail').textContent,/GitHub rate limit/);}finally{await f.close();}
+ try {assert.match(f.cell('downloads').querySelector('span').title,/GitHub rate limit/);assert.match(document.querySelector('.cs-detail').textContent,/GitHub rate limit/);}finally{await f.close();}
 });
 await test('catalog stars and stale timestamps remain visible without statistics requests',async()=>{
  const f=await fixture([sample({statistics:{stars:{status:'available',count:42,stale:true,checkedAt:'2026-09-22T10:00:00Z'}}})],{get:async(p,catalog)=>{assert.ok(!p.endsWith('/downloads'));return catalog;}});
- try {assert.equal(document.querySelector('.cs-package-row td:nth-child(6)').textContent,'42 (stale)');assert.match(document.querySelector('.cs-package-row td:nth-child(6) span').title,/last successful count/);assert.match(document.querySelector('.cs-detail').textContent,/GitHub stars/);}finally{await f.close();}
+ try {assert.equal(f.cell('stars').textContent,'42 (stale)');assert.match(f.cell('stars').querySelector('span').title,/last successful count/);assert.match(document.querySelector('.cs-detail').textContent,/GitHub stars/);}finally{await f.close();}
 });
 await test('type is default; numeric column headers toggle and keep missing counts last',async()=>{
  const metric=count=>({status:'available',count});
  const f=await fixture([sample({id:'low',name:'Low',statistics:{downloads:metric(2),stars:metric(30)}}),sample({id:'high',name:'High',statistics:{downloads:metric(100),stars:metric(1)}}),sample({id:'zero',name:'Zero',statistics:{downloads:metric(0)}}),sample({id:'missing',name:'Missing'})],{closed:true});
  try {
-  assert.equal(document.querySelector('[aria-label="Group packages"]').value,'type');
+  assert.equal(document.querySelector('[aria-label="Group packages"] [aria-pressed="true"]').textContent,'By type');
   const names=()=>[...document.querySelectorAll('.cs-name')].map(e=>e.textContent);
-  const header=async index=>{await act(async()=>document.querySelectorAll('thead button')[index].click());};
-  await header(4);assert.deepEqual(names(),['High','Low','Zero','Missing']);assert.equal(document.querySelectorAll('thead th')[4].getAttribute('aria-sort'),'descending');
-  await header(4);assert.deepEqual(names(),['Zero','Low','High','Missing']);
-  await header(5);assert.deepEqual(names(),['Low','High','Missing','Zero']);
-  await header(0);assert.deepEqual(names(),['High','Low','Missing','Zero']);
-  assert.equal(document.querySelector('[aria-label="Sort packages"]').value,'name');
+  const downloads=await f.header('Downloads');assert.deepEqual(names(),['High','Low','Zero','Missing']);assert.equal(downloads.getAttribute('aria-sort'),'descending');
+  await f.header('Downloads');assert.deepEqual(names(),['Zero','Low','High','Missing']);
+  await f.header('Stars');assert.deepEqual(names(),['Low','High','Missing','Zero']);
+  await f.header('Package');assert.deepEqual(names(),['High','Low','Missing','Zero']);
+  assert.equal(localStorage.getItem('communitystore.sortBy'),'name');
  }finally{await f.close();}
 });
 await test('version columns sort numerically and grouping can be disabled for global ordering',async()=>{
  const f=await fixture([sample({id:'two',name:'Two',version:'2.0.0',installedVersion:'2.0.0',type:'plugin'}),sample({id:'ten',name:'Ten',version:'10.0.0',installedVersion:'10.0.0',type:'connector'})],{closed:true});
- try {const select=document.querySelector('[aria-label="Group packages"]');await act(async()=>{select.value='none';select.dispatchEvent(new window.Event('change',{bubbles:true}));});
- for(const i of [2,3]){await act(async()=>document.querySelectorAll('thead button')[i].click());assert.equal(document.querySelector('.cs-name').textContent,'Ten');await act(async()=>document.querySelectorAll('thead button')[i].click());assert.equal(document.querySelector('.cs-name').textContent,'Two');}
+ try {await f.click('No grouping');
+ for(const label of ['Installed','Offered']){await f.header(label);assert.equal(document.querySelector('.cs-name').textContent,'Ten');await f.header(label);assert.equal(document.querySelector('.cs-name').textContent,'Two');}
  }finally{await f.close();}
 });
 await test('real Remove click uses removal endpoint and never install',async()=>{
@@ -120,6 +130,43 @@ await test('update filter only lists packages with updates',async()=>{
  const f=await fixture([sample(),sample({id:'other',name:'Other',updateAvailable:false})],{closed:true});try{await f.click('Updates');assert.equal(document.querySelectorAll('.cs-package').length,1);await f.click('Sample template');assert.equal(document.querySelector('.cs-detail h2').textContent,'Sample template');}finally{await f.close();}
 });
 await test('a newer installed version is marked apart from an up-to-date install',async()=>{
- const f=await fixture([sample({id:'newer',name:'Newer build',type:'plugin',installedVersion:'2.1.0',updateAvailable:false,installedNewer:true}),sample({id:'current',name:'Current build',type:'plugin',installedVersion:'2.0.0',updateAvailable:false})],{closed:true});try{const newer=document.querySelector('.cs-pill.update');assert.ok(newer,'newer install uses the update (blue) pill');assert.equal(newer.textContent,'Installed (newer)');assert.match(newer.title,/2\.1\.0 is newer than the offered 2\.0\.0/);assert.equal(document.querySelectorAll('.cs-pill.ok').length,1,'the up-to-date install keeps the green pill');}finally{await f.close();}
+ const f=await fixture([sample({id:'newer',name:'Newer build',type:'plugin',installedVersion:'2.1.0',updateAvailable:false,installedNewer:true}),sample({id:'current',name:'Current build',type:'plugin',installedVersion:'2.0.0',updateAvailable:false})],{closed:true});try{const newer=document.querySelector('.cs-package-row .tag.accent');assert.ok(newer,'newer install uses the update (blue) pill');assert.equal(newer.textContent,'Installed (newer)');assert.match(newer.title,/2\.1\.0 is newer than the offered 2\.0\.0/);assert.equal(document.querySelectorAll('.cs-package-row .tag.ok').length,1,'the up-to-date install keeps the green pill');}finally{await f.close();}
+});
+await test('downloads and stars are shown by default; the column menu hides, adds and restores columns',async()=>{
+ const f=await fixture([sample({publishedAt:'2026-11-01T00:00:00Z'})],{closed:true});
+ try{
+  assert.deepEqual(f.headers(),['Package','Type','Installed','Offered','Downloads','Stars','Status']);
+  await act(async()=>document.querySelector('thead tr').dispatchEvent(new window.MouseEvent('contextmenu',{bubbles:true,clientX:5,clientY:5})));
+  const menu=f.menus.at(-1);const item=label=>menu.find(i=>i.label?.trim().endsWith(label));
+  assert.ok(item('Downloads').label.startsWith('✓'));assert.ok(!item('Author').label.startsWith('✓'));assert.equal(item('Package'),undefined,'the package column cannot be hidden');
+  await act(async()=>item('Downloads').onClick());await act(async()=>item('Author').onClick());
+  assert.deepEqual(f.headers(),['Package','Type','Author','Installed','Offered','Stars','Status']);
+  assert.equal(f.cell('author').textContent,'Community');
+  await f.click('Columns');await act(async()=>f.menus.at(-1).find(i=>i.label==='Restore Default').onClick());
+  assert.deepEqual(f.headers(),['Package','Type','Installed','Offered','Downloads','Stars','Status']);
+ }finally{await f.close();}
+});
+await test('dragging a header reorders data columns and keeps Package first',async()=>{
+ const f=await fixture([sample()],{closed:true});
+ const drop=async(from,to)=>{const th=[...document.querySelectorAll('thead th')].find(t=>t.firstChild.textContent===to);const event=new window.Event('drop',{bubbles:true,cancelable:true});event.dataTransfer={getData:()=>from};await act(async()=>th.dispatchEvent(event));};
+ try{
+  assert.equal(document.querySelector('thead th').draggable,false);
+  await drop('stars','Type');assert.deepEqual(f.headers(),['Package','Stars','Type','Installed','Offered','Downloads','Status']);
+  await drop('status','Package');assert.deepEqual(f.headers(),['Package','Status','Stars','Type','Installed','Offered','Downloads']);
+  await drop('name','Status');assert.equal(f.headers()[0],'Package');
+ }finally{await f.close();}
+});
+await test('status lists every applicable state, not just the first',async()=>{
+ const f=await fixture([sample({modified:true})],{closed:true});
+ try{assert.deepEqual([...f.cell('status').querySelectorAll('.tag')].map(t=>t.textContent),['Locally modified','Update available']);}finally{await f.close();}
+});
+await test('search matches authors and the clear button resets it',async()=>{
+ const f=await fixture([sample(),sample({id:'other',name:'Other',authors:['Someone Else']})],{closed:true});
+ const input=document.querySelector('[aria-label="Search packages"]');
+ try{
+  await act(async()=>{const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;setter.call(input,'someone');input.dispatchEvent(new window.Event('input',{bubbles:true}));});
+  assert.deepEqual([...document.querySelectorAll('.cs-name')].map(e=>e.textContent),['Other']);
+  await act(async()=>document.querySelector('[aria-label="Clear search"]').click());assert.equal(document.querySelectorAll('.cs-name').length,2);
+ }finally{await f.close();}
 });
 } finally { await rm(temporary,{recursive:true,force:true}); }

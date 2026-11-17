@@ -1,7 +1,7 @@
 // web/plugin.jsx
 import { platform } from "@oie/web-shell";
 
-// node_modules/marked/lib/marked.esm.js
+// ../../../../Users/cgibson/Documents/Development/Repositories/OIE/oie-community-store/webadmin/node_modules/marked/lib/marked.esm.js
 function _getDefaults() {
   return {
     async: false,
@@ -2112,83 +2112,69 @@ function renderDocsHtml(markdown, repo, tag2, images, bases) {
 
 // web/store-style.js
 var STORE_CSS = `
-.cs-store { font-family: var(--font-ui); color: var(--text); }
-.cs-store { min-height:0; overflow:hidden; }
-.cs-store .cs-header { flex:none; padding:24px 24px 0; }
-.cs-store .cs-body { padding:0 24px 24px; overflow:hidden; min-height:0; display:flex; flex-direction:column; }
+.cs-store { font-family: var(--font-ui); color: var(--text); min-height:0; overflow:hidden; }
+.cs-store .cs-header { flex:none; display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 16px 0; }
+.cs-store .cs-tabs { margin:0; }
+.cs-store .cs-count { margin-left:6px; font-family:var(--font-mono); font-size:10px; color:var(--text-faint); }
+.cs-store .cs-sync { margin-left:auto; font-size:10.5px; color:var(--text-faint); white-space:nowrap; }
+.cs-store .cs-body { padding:10px 16px 14px; overflow:hidden; min-height:0; display:flex; flex-direction:column; }
 .cs-store .cs-catalog { display:flex; flex-direction:column; flex:1; min-height:0; }
-.cs-store .cs-toolbar { flex:none; }
 .cs-store .cs-settings-scroll { overflow:auto; min-height:0; }
 .cs-store .cs-body > .cs-notice { flex-shrink:0; max-height:25%; overflow:auto; }
-.cs-store .cs-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:22px; }
-.cs-store .cs-heading h1 { margin:0 0 4px; font-size:22px; font-weight:700; letter-spacing:-.7px; }
-.cs-store .cs-heading p { margin:0; color:var(--text-dim); }
-.cs-store .cs-sync { text-align:right; font-size:11px; color:var(--text-dim); }
-.cs-store .cs-sync button { margin-bottom:6px; }
-.cs-store .cs-tabs { display:flex; gap:24px; border-bottom:1px solid var(--line); margin-bottom:22px; }
-.cs-store .cs-tab { padding:10px 0 13px; border:0; border-bottom:3px solid transparent; background:none; color:var(--text-dim); cursor:pointer; font:inherit; }
-.cs-store .cs-tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:650; }
-.cs-store .cs-count { margin-left:6px; padding:2px 6px; border-radius:5px; font-size:11px; background:var(--accent-glow); }
-.cs-store .cs-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-.cs-store .cs-search { flex:1; min-width:180px; }
-.cs-store .cs-search .field { width:100%; padding:11px 14px; }
-.cs-store .cs-toolbar select { width:auto; max-width:230px; padding:10px 32px 10px 12px; }
-.cs-store .cs-result-count { color:var(--text-dim); font-size:12px; white-space:nowrap; }
-.cs-store .cs-workspace { overflow:auto; min-height:0; flex:1; border:1px solid var(--line); border-radius:8px; }
-.cs-store .cs-package { width:100%; display:flex; gap:12px; align-items:center; text-align:left; border:0; padding:0; background:none; color:var(--text); font:inherit; cursor:pointer; }
-.cs-store .cs-icon { flex-shrink:0; display:grid; place-items:center; width:44px; height:44px; border-radius:11px; border:1px solid var(--line); background:var(--accent-glow); color:var(--accent); }
-.cs-store .cs-icon svg { width:23px; height:23px; }
-.cs-store .cs-name { display:block; font-size:14px; font-weight:650; margin:0 0 5px; overflow-wrap:anywhere; }
-.cs-store .cs-description { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--text-dim); font-size:12px; line-height:1.6; }
-.cs-store .cs-meta { display:flex; gap:9px; flex-wrap:wrap; color:var(--text-dim); font-size:11px; margin-top:10px; overflow-wrap:anywhere; }
-.cs-store .cs-pill { display:inline-block; border-radius:5px; padding:3px 8px; color:var(--text-dim); background:var(--bg3); font-size:11px; line-height:1.5; white-space:nowrap; }
-.cs-store .cs-pill.update { color:var(--accent); background:var(--accent-glow); }
-.cs-store .cs-pill.ok { color:var(--ok); background:color-mix(in srgb,var(--ok) 12%,transparent); }
-.cs-store .cs-pill.warn { color:var(--warn); background:color-mix(in srgb,var(--warn) 12%,transparent); }
-.cs-store .cs-pill.error { color:var(--err); background:color-mix(in srgb,var(--err) 12%,transparent); }
-.cs-store .cs-detail { padding:0; min-width:0; }
-.cs-store .cs-detail h2 { margin:16px 0 5px; font-size:21px; line-height:1.3; letter-spacing:-.4px; overflow-wrap:anywhere; }
-.cs-store .cs-detail-description { color:var(--text-dim); line-height:1.7; margin:17px 0; }
-.cs-store .cs-facts { border-top:1px solid var(--line); padding-top:12px; margin:20px 0; font-size:12px; }
-.cs-store .cs-fact { display:flex; gap:12px; justify-content:space-between; padding:7px 0; }
+.cs-store .cs-toolbar { flex:none; display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.cs-store .cs-search { position:relative; flex:1; min-width:200px; max-width:420px; }
+.cs-store .cs-search input { padding-right:30px; }
+.cs-store .cs-search-clear { position:absolute; right:3px; top:50%; transform:translateY(-50%); }
+.cs-store .cs-toolbar select { width:auto; max-width:230px; }
+.cs-store .cs-result-count { margin-left:auto; color:var(--text-faint); font-family:var(--font-mono); font-size:10px; white-space:nowrap; }
+.cs-store .cs-grid { flex:1; min-height:0; display:flex; flex-direction:column; }
+.cs-store .cs-grid > .dt-wrap { flex:1; min-height:0; }
+.cs-store .cs-package-row { cursor:pointer; }
+.cs-store .cs-package { display:flex; align-items:center; gap:8px; max-width:100%; min-width:0; border:0; padding:0; background:none; color:var(--text); font:inherit; cursor:pointer; text-align:left; }
+.cs-store .cs-name { font-weight:600; white-space:nowrap; }
+.cs-store .cs-description { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-faint); }
+.cs-store .cs-group-toggle { width:100%; border:0; padding:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.cs-store .cs-tags { display:inline-flex; gap:4px; flex-wrap:wrap; }
+.cs-store .cs-table .cs-tags { flex-wrap:nowrap; }
+.cs-store .tag.ok { color:var(--ok); border-color:color-mix(in srgb,var(--ok) 40%,transparent); background:color-mix(in srgb,var(--ok) 10%,transparent); }
+.cs-store .cs-icon { flex-shrink:0; display:grid; place-items:center; width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:var(--accent-glow); color:var(--accent); }
+.cs-store .cs-icon svg { width:18px; height:18px; }
+.cs-store .cs-table .cs-icon { width:16px; height:16px; border:0; border-radius:0; background:none; }
+.cs-store .cs-table .cs-icon svg { width:15px; height:15px; }
+.cs-store .cs-detail { min-width:0; font-size:12px; }
+.cs-store .cs-detail-title { display:flex; align-items:center; gap:10px; }
+.cs-store .cs-detail h2 { margin:0; font-size:16px; line-height:1.3; letter-spacing:-.2px; overflow-wrap:anywhere; }
+.cs-store .cs-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; color:var(--text-dim); font-size:11px; overflow-wrap:anywhere; }
+.cs-store .cs-detail-description { color:var(--text-dim); line-height:1.6; margin:10px 0 12px; }
+.cs-store .cs-decide { border:1px solid var(--line); border-radius:var(--radius); background:var(--bg2); padding:10px 12px; margin-bottom:12px; }
+.cs-store .cs-flow { font-family:var(--font-mono); font-size:12px; margin-bottom:8px; }
+.cs-store .cs-flow-to { color:var(--accent); }
+.cs-store .cs-dim { color:var(--text-faint); }
+.cs-store .cs-facts { margin:0 0 10px; font-size:11.5px; }
+.cs-store .cs-fact { display:grid; grid-template-columns:170px 1fr; gap:12px; padding:3px 0; }
 .cs-store .cs-fact dt { color:var(--text-dim); }
-.cs-store .cs-fact dd { margin:0; text-align:right; overflow-wrap:anywhere; min-width:0; }
-.cs-store .cs-notice { padding:12px 14px; background:var(--bg2); border:1px solid var(--line); border-radius:8px; margin-bottom:15px; font-size:12px; overflow-wrap:anywhere; }
-.cs-store .cs-notice.warn { color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%,var(--line)); }
-.cs-store .cs-notice.error { color:var(--err); border-color:color-mix(in srgb,var(--err) 30%,var(--line)); }
-.cs-store .cs-primary-action { width:100%; justify-content:center; padding:11px; }
-.cs-store .cs-package-info { font-size:12px; margin-top:18px; }
+.cs-store .cs-fact dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+.cs-store .cs-notice { padding:8px 12px; background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:10px; font-size:11.5px; overflow-wrap:anywhere; }
+.cs-store .cs-notice.warn { color:var(--warn); border-color:color-mix(in srgb,var(--warn) 35%,var(--line)); }
+.cs-store .cs-notice.error { color:var(--err); border-color:color-mix(in srgb,var(--err) 35%,var(--line)); }
+.cs-store .cs-package-info { font-size:11.5px; margin:10px 0; }
 .cs-store .cs-package-info summary { cursor:pointer; color:var(--text-dim); }
-.cs-store .cs-detail-links { display:flex; gap:14px; flex-wrap:wrap; margin-top:18px; font-size:12px; }
+.cs-store .cs-package-info .cs-facts { margin-top:8px; }
+.cs-store .cs-detail-links { display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; font-size:11.5px; }
 .cs-store .cs-detail-links a { overflow-wrap:anywhere; }
-.cs-store .cs-footnote { font-size:11px; line-height:1.6; color:var(--text-dim); margin:12px 0; }
+.cs-store .cs-footnote { font-size:10.5px; line-height:1.55; color:var(--text-faint); margin:6px 0 0; }
+.cs-store .cs-manage { border-top:1px solid var(--line); margin-top:14px; padding-top:12px; }
 .cs-store .cs-empty { padding:28px; color:var(--text-dim); }
-.cs-store .cs-docs-toggle { width:100%; text-align:left; margin-top:20px; }
-.cs-store .tag { white-space:nowrap; }
+.cs-store .cs-docs-toggle { margin-top:6px; }
 .cs-store .cs-docs { font-size:12px; }
-.cs-store button:focus-visible, .cs-store a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-.cs-store .cs-package:focus-visible { outline-offset:-3px; }
-.cs-store .cs-overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); z-index:1000; padding:20px; }
-.cs-store .cs-dialog { width:500px; max-width:100%; max-height:90vh; overflow:auto; box-shadow:var(--shadow); }
-.cs-store .cs-documentation-dialog { width:1000px; height: min(85vh,900px); display:flex; flex-direction:column; overflow:hidden; }
-.cs-store .cs-documentation-dialog > .panel-header { flex:none; display:flex; align-items:center; justify-content:space-between; gap:16px; }
-.cs-store .cs-documentation-dialog > .panel-body { overflow:auto; min-height:0; flex:1; }
-.cs-store .cs-documentation-dialog .cs-docs { font-size:14px; line-height:1.7; }
-.cs-store .cs-documentation-dialog .panel { margin:0; border:0; box-shadow:none; }
-.cs-store .cs-dialog-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:20px; }
-.cs-store .cs-dialog .field { max-width:100% !important; }
-.cs-store .cs-table { width:100%; border-collapse:separate; border-spacing:0; text-align:left; }
-.cs-store .cs-table th, .cs-store .cs-table td { padding:12px 16px; border-bottom:1px solid var(--line); font-size:12px; }
-.cs-store .cs-table thead th { position:sticky; top:0; z-index:1; background:var(--bg2); color:var(--text-dim); white-space:nowrap; }
-.cs-store .cs-sort-heading { border:0; padding:0; background:none; color:inherit; font:inherit; font-weight:600; cursor:pointer; text-align:left; width:100%; }
-.cs-store .cs-table td:first-child { width:52%; min-width:260px; }
-.cs-store .cs-table td:not(:first-child) { white-space:nowrap; }
-.cs-store .cs-package-row { background:var(--bg1); cursor:pointer; }
-.cs-store .cs-package-row:hover { background:var(--bg2); }
-.cs-store .cs-group th { background:var(--bg2); padding:0; }
-.cs-store .cs-group button { width:100%; padding:12px 16px; text-align:left; border:0; background:none; color:var(--text); font:inherit; cursor:pointer; }
-.cs-store .cs-table .cs-icon { width:30px; height:30px; border:0; border-radius:0; background:none; }
-@media(max-width:800px) { .cs-store .cs-workspace { overflow:auto; min-height:0; flex:1; border:1px solid var(--line); border-radius:8px; } .cs-store .cs-body { padding:0 16px 16px; } .cs-store .cs-header { padding:16px 16px 0; } .cs-store .cs-tabs { gap:18px; flex-wrap:wrap; } .cs-store .cs-heading { align-items:flex-start; } .cs-store .cs-search { min-width:100%; } }
+.cs-store button:focus-visible, .cs-store a:focus-visible, .cs-store th:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.cs-store .cs-documentation-dialog { height:min(85vh,900px); }
+.cs-store .cs-documentation-dialog > .modal-body { flex:1; min-height:0; }
+.cs-store .cs-documentation-dialog .cs-docs { font-size:13px; line-height:1.65; }
+.cs-store .cs-close { margin-left:auto; }
+.cs-store .cs-dialog .modal-body { font-size:12px; line-height:1.55; }
+.cs-store .modal input:not([type=radio]), .cs-store .modal select { max-width:100% !important; }
+@media(max-width:800px) { .cs-store .cs-body { padding:8px 10px 10px; } .cs-store .cs-header { padding:8px 10px 0; } .cs-store .cs-sync { margin-left:0; } .cs-store .cs-search { min-width:100%; } .cs-store .cs-fact { grid-template-columns:130px 1fr; } }
 `;
 
 // web/plugin.jsx
@@ -2307,7 +2293,7 @@ function ConfirmOverlay({ title, children, confirmLabel, onConfirm, secondaryLab
       first.focus();
     }
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "cs-overlay", style: inactive ? { display: "none" } : void 0 }, /* @__PURE__ */ React.createElement("div", { className: `panel cs-dialog ${documentation ? "cs-documentation-dialog" : ""}`, role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, ref: dialog, tabIndex: -1, onKeyDown }, /* @__PURE__ */ React.createElement("div", { className: "panel-header", id: titleId }, title, documentation ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: onCancel, "aria-label": closeLabel }, "Close") : null), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, children, loading ? /* @__PURE__ */ React.createElement("p", { role: "status" }, "Loading libraries\u2026") : null, error ? /* @__PURE__ */ React.createElement("p", { role: "alert", className: "cs-notice error" }, error) : null, !documentation ? /* @__PURE__ */ React.createElement("div", { className: "cs-dialog-actions" }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => onCancel(), disabled: busy }, "Cancel"), secondaryLabel ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => onSecondary(), disabled: busy || loading }, secondaryLabel) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => onConfirm(), disabled: busy || loading }, busy ? "Working\u2026" : confirmLabel)) : null)));
+  return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay cs-overlay", style: inactive ? { display: "none" } : void 0 }, /* @__PURE__ */ React.createElement("div", { className: `modal ${documentation ? "wide cs-documentation-dialog" : "cs-dialog"}`, role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, ref: dialog, tabIndex: -1, onKeyDown }, /* @__PURE__ */ React.createElement("div", { className: "modal-header" }, /* @__PURE__ */ React.createElement("span", { id: titleId }, title), documentation ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm btn-ghost cs-close", onClick: onCancel, "aria-label": closeLabel }, "Close") : null), /* @__PURE__ */ React.createElement("div", { className: "modal-body" }, children, loading ? /* @__PURE__ */ React.createElement("p", { role: "status" }, "Loading libraries\u2026") : null, error ? /* @__PURE__ */ React.createElement("p", { role: "alert", className: "cs-notice error" }, error) : null), !documentation ? /* @__PURE__ */ React.createElement("div", { className: "modal-foot" }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => onCancel(), disabled: busy }, "Cancel"), secondaryLabel ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", onClick: () => onSecondary(), disabled: busy || loading }, secondaryLabel) : null, /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: () => onConfirm(), disabled: busy || loading }, busy ? "Working\u2026" : confirmLabel)) : null));
 }
 function useStoreActions(refresh, onComplete) {
   const [confirm, setConfirm] = React.useState(null);
@@ -2483,7 +2469,7 @@ function useStoreActions(refresh, onComplete) {
       /* @__PURE__ */ React.createElement("div", null, copy ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " version ", entry.version, " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, ") as a new copy with a fresh id", entry.installedVersion ? " \u2014 what you have installed is left untouched" : "", ". The copy is yours: the store does not track or update it.") : content ? /* @__PURE__ */ React.createElement("p", null, "Imports the ", TYPE_LABELS[entry.type] || entry.type, " ", /* @__PURE__ */ React.createElement("strong", null, entry.name), " from", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " (", entry.tag, "). It takes effect immediately \u2014 no engine restart.") : /* @__PURE__ */ React.createElement("p", null, "This installs ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.repo), " release", " ", /* @__PURE__ */ React.createElement("span", { className: "mono" }, entry.tag), " into the engine's extensions directory after sha256 verification."), wantsLibrary ? /* @__PURE__ */ React.createElement("div", { className: "mt-3" }, /* @__PURE__ */ React.createElement("div", { className: "text-text-dim mb-1" }, "Add to library:"), /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2 mb-1", style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "radio", name: "cs-lib", checked: libMode === "new", onChange: () => setLibMode("new") }), "Create new library:", /* @__PURE__ */ React.createElement(
         "input",
         {
-          className: "field",
+          "aria-label": "New library name",
           style: { maxWidth: 220 },
           value: newLib,
           placeholder: "Library name",
@@ -2493,7 +2479,7 @@ function useStoreActions(refresh, onComplete) {
       )), /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2", style: { cursor: libraries.length ? "pointer" : "default" } }, /* @__PURE__ */ React.createElement("input", { type: "radio", name: "cs-lib", checked: libMode === "existing", disabled: !libraries.length, onChange: () => setLibMode("existing") }), "Existing library:", /* @__PURE__ */ React.createElement(
         "select",
         {
-          className: "field",
+          "aria-label": "Existing library",
           style: { maxWidth: 220 },
           value: existingLib,
           disabled: !libraries.length,
@@ -2552,16 +2538,21 @@ var TYPE_ICONS = {
 function PackageIcon({ type }) {
   return /* @__PURE__ */ React.createElement("span", { className: "cs-icon", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.7", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: TYPE_ICONS[type] || TYPE_ICONS.plugin })));
 }
+function statusTags(entry) {
+  const tags = [];
+  if (entry.revoked) tags.push(["red", entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source"]);
+  if (entry.stagedVersion) tags.push(["amber", "Restart pending"]);
+  if (entry.modified) tags.push(["amber", entry.driftTracked === false ? "Changes unknown" : "Locally modified"]);
+  if (entry.updateAvailable && !entry.stagedVersion && !entry.revoked) tags.push(["accent", "Update available"]);
+  if (!entry.compatible && !entry.revoked) tags.push(["amber", "Incompatible"]);
+  if (entry.deprecated) tags.push(["amber", "Deprecated"]);
+  if (tags.length) return tags;
+  if (entry.installedVersion && entry.installedNewer) return [["accent", "Installed (newer)", `Installed ${entry.installedVersion} is newer than the offered ${entry.version}`]];
+  if (entry.installedVersion) return [["ok", "Installed"]];
+  return [["", `Available to ${isContentType(entry.type) ? "import" : "install"}`]];
+}
 function PackageStatus({ entry }) {
-  if (entry.revoked) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill error" }, entry.revokedReason === "blocked" ? "Blocked by source" : "Removed from source");
-  if (entry.stagedVersion) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Restart pending");
-  if (entry.modified) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, entry.driftTracked === false ? "Changes unknown" : "Locally modified");
-  if (entry.updateAvailable) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill update" }, "Update available");
-  if (!entry.compatible) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Incompatible");
-  if (entry.deprecated) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill warn" }, "Deprecated");
-  if (entry.installedVersion && entry.installedNewer) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill update", title: `Installed ${entry.installedVersion} is newer than the offered ${entry.version}` }, "Installed (newer)");
-  if (entry.installedVersion) return /* @__PURE__ */ React.createElement("span", { className: "cs-pill ok" }, "Installed");
-  return /* @__PURE__ */ React.createElement("span", { className: "cs-pill" }, "Available to ", isContentType(entry.type) ? "import" : "install");
+  return /* @__PURE__ */ React.createElement("span", { className: "cs-tags" }, statusTags(entry).map(([tone, label, title]) => /* @__PURE__ */ React.createElement("span", { key: label, className: `tag ${tone}`, title }, label)));
 }
 function safeExternalUrl(value) {
   try {
@@ -2611,7 +2602,8 @@ function DetailView({ entry, actions }) {
   const update = entry.updateAvailable || content && entry.installedVersion && !channelCopy;
   const actionable = canInstall() && entry.installable && entry.compatible && !entry.revoked && !entry.stagedVersion && (content || !entry.installedVersion || entry.updateAvailable);
   const label = channelCopy ? "Import as copy" : update ? entry.updateAvailable ? `Review update to ${entry.version}` : "Review re-import" : content ? "Review import" : "Review installation";
-  return /* @__PURE__ */ React.createElement("aside", { className: "cs-detail", "aria-label": "Selected package" }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("h2", null, entry.name), /* @__PURE__ */ React.createElement("div", { className: "cs-meta" }, TYPE_LABELS[entry.type] || entry.type, entry.authors?.length ? ` \xB7 by ${entry.authors.join(", ")}` : ""), /* @__PURE__ */ React.createElement("p", { className: "cs-detail-description" }, entry.description || "No description provided."), /* @__PURE__ */ React.createElement(PackageStatus, { entry }), /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, DOWNLOAD_NOTE, " ", entry.downloads?.status !== "available" ? downloadError(entry) : ""), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Offered version"), /* @__PURE__ */ React.createElement("dd", null, entry.revoked ? "Unavailable" : entry.version)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Installed version"), /* @__PURE__ */ React.createElement("dd", null, entry.installedVersion || "Not installed")), entry.stagedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Staged version"), /* @__PURE__ */ React.createElement("dd", null, entry.stagedVersion)) : null, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Downloads \xB7 all versions"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry }), /* @__PURE__ */ React.createElement("div", { className: "cs-footnote" }, metricFreshness(entry.downloads)))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "GitHub stars"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(StarCount, { entry }), /* @__PURE__ */ React.createElement("div", { className: "cs-footnote" }, metricFreshness(entry.stars)))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Engine compatibility"), /* @__PURE__ */ React.createElement("dd", null, entry.minEngineVersion || "Unspecified", entry.maxEngineVersion ? ` \u2013 ${entry.maxEngineVersion}` : entry.minEngineVersion ? "+" : ""))), entry.revoked ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice error" }, "This package is no longer offered by its source. Review whether you still trust it.") : entry.stagedVersion ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Version ", entry.stagedVersion, " is staged. Restart the engine to activate it.") : !entry.compatible ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "No compatible version is available for this engine.") : /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, content ? "Imported content is available immediately. No restart needed." : "Engine restart required after installation."), entry.modified ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, entry.driftTracked === false ? "Local changes are unknown with the previous tracking format." : "Local edits detected.", " Review before replacing this content. You can keep your changes by importing a copy.") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".") : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, "Newer snapshot available: ", entry.newerSnapshot, ". Import as a copy to keep the installed channel.") : null, actionable ? /* @__PURE__ */ React.createElement(
+  const target = entry.stagedVersion || (entry.updateAvailable && !entry.revoked ? entry.version : null);
+  return /* @__PURE__ */ React.createElement("aside", { className: "cs-detail", "aria-label": "Selected package" }, /* @__PURE__ */ React.createElement("div", { className: "cs-detail-title" }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("h2", null, entry.name)), /* @__PURE__ */ React.createElement("div", { className: "cs-meta" }, /* @__PURE__ */ React.createElement("span", null, TYPE_LABELS[entry.type] || entry.type, entry.authors?.length ? ` \xB7 by ${entry.authors.join(", ")}` : ""), /* @__PURE__ */ React.createElement(PackageStatus, { entry })), /* @__PURE__ */ React.createElement("p", { className: "cs-detail-description" }, entry.description || "No description provided."), /* @__PURE__ */ React.createElement("section", { className: "cs-decide", "aria-label": "Installation" }, entry.installedVersion && target ? /* @__PURE__ */ React.createElement("div", { className: "cs-flow" }, entry.installedVersion, " ", /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, "\u2192"), " ", /* @__PURE__ */ React.createElement("span", { className: "cs-flow-to" }, target), entry.stagedVersion ? " (staged)" : "") : null, /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Installed version"), /* @__PURE__ */ React.createElement("dd", null, entry.installedVersion || "Not installed")), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Offered version"), /* @__PURE__ */ React.createElement("dd", null, entry.revoked ? "Unavailable" : entry.version, entry.publishedAt && !entry.revoked ? /* @__PURE__ */ React.createElement("span", { className: "cs-dim" }, " \xB7 ", new Date(entry.publishedAt).toLocaleDateString()) : null)), entry.stagedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Staged version"), /* @__PURE__ */ React.createElement("dd", null, entry.stagedVersion)) : null, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Engine compatibility"), /* @__PURE__ */ React.createElement("dd", null, entry.minEngineVersion || "Unspecified", entry.maxEngineVersion ? ` \u2013 ${entry.maxEngineVersion}` : entry.minEngineVersion ? "+" : "")), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Source"), /* @__PURE__ */ React.createElement("dd", null, entry.source)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Artifact integrity"), /* @__PURE__ */ React.createElement("dd", null, entry.sha256 || entry.checksumUrl ? "SHA-256 on install" : "No published checksum"))), entry.revoked ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice error" }, "This package is no longer offered by its source. Review whether you still trust it.") : entry.stagedVersion ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Version ", entry.stagedVersion, " is staged. Restart the engine to activate it.") : !entry.compatible ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "No compatible version is available for this engine.") : /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, content ? "Imported content is available immediately. No restart needed." : "Engine restart required after installation."), entry.modified ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, entry.driftTracked === false ? "Local changes are unknown with the previous tracking format." : "Local edits detected.", " Review before replacing this content. You can keep your changes by importing a copy.") : null, entry.deprecated ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice warn" }, "Deprecated by the publisher", entry.deprecationMessage ? `: ${entry.deprecationMessage}` : ".") : null, entry.newerSnapshot ? /* @__PURE__ */ React.createElement("p", { className: "cs-notice" }, "Newer snapshot available: ", entry.newerSnapshot, ". Import as a copy to keep the installed channel.") : null, actionable ? /* @__PURE__ */ React.createElement(
     "button",
     {
       className: "btn btn-primary cs-primary-action",
@@ -2619,7 +2611,7 @@ function DetailView({ entry, actions }) {
       onClick: () => channelCopy ? actions.requestCopy(entry) : update ? actions.requestUpdate(entry) : actions.requestInstall(entry)
     },
     label
-  ) : null, /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, "Community published. A checksum verifies artifact integrity, not publisher identity."), /* @__PURE__ */ React.createElement("details", { className: "cs-package-info" }, /* @__PURE__ */ React.createElement("summary", null, "Package information"), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "License"), /* @__PURE__ */ React.createElement("dd", null, entry.license || "Unspecified")), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Repository"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.repoUrl || `https://github.com/${entry.repo}` }, entry.repo || "Repository"))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Source"), /* @__PURE__ */ React.createElement("dd", null, entry.source)), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Artifact integrity"), /* @__PURE__ */ React.createElement("dd", null, entry.sha256 || entry.checksumUrl ? "SHA-256 on install" : "No published checksum")), entry.publishedAt ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Published"), /* @__PURE__ */ React.createElement("dd", null, new Date(entry.publishedAt).toLocaleDateString())) : null, !entry.offeredIsLatest && entry.latestTag ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Latest release"), /* @__PURE__ */ React.createElement("dd", null, entry.latestTag, " (offering the compatible version)")) : null)), /* @__PURE__ */ React.createElement("div", { className: "cs-detail-links" }, /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.documentation }, "Documentation \u2197"), /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.releaseUrl }, "Release notes \u2197")), !entry.revoked ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { className: "btn cs-docs-toggle", "aria-expanded": docsOpen, onClick: () => setDocsOpen(!docsOpen) }, docsOpen ? "Hide publisher documentation" : "Read publisher documentation"), docsOpen ? /* @__PURE__ */ React.createElement(DocsPanel, { entry }) : null) : null, entry.installedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-facts" }, content && entry.type !== "channel" && canRemove() ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", disabled: actions.busy, onClick: () => actions.requestRemove(entry) }, "Remove from engine\u2026") : /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, entry.type === "channel" ? "Manage or delete this channel in Channels." : "Manage or uninstall this package in Extensions.")) : null);
+  ) : null, /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, "Community published. A checksum verifies artifact integrity, not publisher identity.")), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Downloads \xB7 all versions"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry }), /* @__PURE__ */ React.createElement("div", { className: "cs-footnote" }, entry.downloads?.status !== "available" ? `${downloadError(entry)} ` : "", metricFreshness(entry.downloads)))), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "GitHub stars"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(StarCount, { entry }), /* @__PURE__ */ React.createElement("div", { className: "cs-footnote" }, metricFreshness(entry.stars))))), /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, DOWNLOAD_NOTE), /* @__PURE__ */ React.createElement("details", { className: "cs-package-info" }, /* @__PURE__ */ React.createElement("summary", null, "Package information"), /* @__PURE__ */ React.createElement("dl", { className: "cs-facts" }, /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "License"), /* @__PURE__ */ React.createElement("dd", null, entry.license || "Unspecified")), /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Repository"), /* @__PURE__ */ React.createElement("dd", null, /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.repoUrl || `https://github.com/${entry.repo}` }, entry.repo || "Repository"))), !entry.offeredIsLatest && entry.latestTag ? /* @__PURE__ */ React.createElement("div", { className: "cs-fact" }, /* @__PURE__ */ React.createElement("dt", null, "Latest release"), /* @__PURE__ */ React.createElement("dd", null, entry.latestTag, " (offering the compatible version)")) : null)), /* @__PURE__ */ React.createElement("div", { className: "cs-detail-links" }, /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.documentation }, "Documentation \u2197"), /* @__PURE__ */ React.createElement(ExternalLink, { href: entry.releaseUrl }, "Release notes \u2197")), !entry.revoked ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { className: "btn cs-docs-toggle", "aria-expanded": docsOpen, onClick: () => setDocsOpen(!docsOpen) }, docsOpen ? "Hide publisher documentation" : "Read publisher documentation"), docsOpen ? /* @__PURE__ */ React.createElement(DocsPanel, { entry }) : null) : null, entry.installedVersion ? /* @__PURE__ */ React.createElement("div", { className: "cs-manage" }, content && entry.type !== "channel" && canRemove() ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", disabled: actions.busy, onClick: () => actions.requestRemove(entry) }, "Remove from engine\u2026") : /* @__PURE__ */ React.createElement("p", { className: "cs-footnote" }, entry.type === "channel" ? "Manage or delete this channel in Channels." : "Manage or uninstall this package in Extensions.")) : null);
 }
 function statusGroup(e) {
   if (e.stagedVersion) return "Restart pending";
@@ -2628,7 +2620,23 @@ function statusGroup(e) {
   return e.installedVersion ? "Installed" : "Available";
 }
 var STATUS_ORDER = ["Restart pending", "Needs attention", "Updates available", "Installed", "Available"];
-var SORT_COLUMNS = [["name", "Package"], ["type", "Type"], ["installedVersion", "Installed"], ["version", "Available"], ["downloads", "Downloads"], ["stars", "Stars"], ["status", "Status"]];
+var COLUMNS = [
+  { key: "name", label: "Package", pinned: true },
+  { key: "type", label: "Type" },
+  { key: "author", label: "Author" },
+  { key: "repo", label: "Repository" },
+  { key: "installedVersion", label: "Installed", mono: true },
+  { key: "version", label: "Offered", mono: true },
+  { key: "publishedAt", label: "Published" },
+  { key: "downloads", label: "Downloads", num: true },
+  { key: "stars", label: "Stars", num: true },
+  { key: "status", label: "Status" }
+];
+var DATA_COLUMN_KEYS = COLUMNS.filter((c) => !c.pinned).map((c) => c.key);
+var COLUMN_WIDTHS = { type: 150, author: 150, repo: 220, installedVersion: 100, version: 100, publishedAt: 110, downloads: 110, stars: 80, status: 230 };
+var DEFAULT_HIDDEN_COLUMNS = ["author", "repo", "publishedAt"];
+var PACKAGE_MIN_WIDTH = 280;
+var DESCENDING_FIRST = ["downloads", "stars", "installedVersion", "version", "publishedAt"];
 function comparePackages(a, b, key, direction) {
   const value = (entry) => {
     if (key === "downloads" || key === "stars") {
@@ -2637,6 +2645,11 @@ function comparePackages(a, b, key, direction) {
     }
     if (key === "type") return typeRank(entry.type);
     if (key === "status") return STATUS_ORDER.indexOf(statusGroup(entry));
+    if (key === "author") return entry.authors?.join(", ") || null;
+    if (key === "publishedAt") {
+      const t = Date.parse(entry.publishedAt);
+      return Number.isNaN(t) ? null : t;
+    }
     if (key === "version" && entry.revoked) return null;
     return entry[key] || null;
   };
@@ -2646,22 +2659,108 @@ function comparePackages(a, b, key, direction) {
   const compared = x == null ? 0 : typeof x === "number" ? x - y : x.localeCompare(y, void 0, { numeric: true, sensitivity: "base" });
   return compared * (direction === "desc" ? -1 : 1) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 }
+function PackageCell({ column, entry, onSelect }) {
+  switch (column.key) {
+    case "name":
+      return /* @__PURE__ */ React.createElement("button", { className: "cs-package", "aria-haspopup": "dialog", onClick: (e) => {
+        e.stopPropagation();
+        onSelect(entry.id);
+      } }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("span", { className: "cs-name" }, entry.name), /* @__PURE__ */ React.createElement("span", { className: "cs-description" }, entry.description));
+    case "type":
+      return TYPE_LABELS[entry.type] || entry.type;
+    case "author":
+      return entry.authors?.join(", ") || "\u2014";
+    case "repo":
+      return entry.repo || "\u2014";
+    case "installedVersion":
+      return entry.installedVersion || "\u2014";
+    case "version":
+      return entry.revoked ? "\u2014" : entry.version;
+    case "publishedAt":
+      return entry.publishedAt ? new Date(entry.publishedAt).toLocaleDateString() : "\u2014";
+    case "downloads":
+      return /* @__PURE__ */ React.createElement(DownloadCount, { entry });
+    case "stars":
+      return /* @__PURE__ */ React.createElement(StarCount, { entry });
+    case "status":
+      return /* @__PURE__ */ React.createElement(PackageStatus, { entry });
+    default:
+      return null;
+  }
+}
 function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
   const [search, setSearch] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [groupBy, setGroupBy] = React.useState(() => getPref("groupBy", "type"));
   const [sortBy, setSortBy] = React.useState(() => getPref("sortBy", "name"));
   const [sortDirection, setSortDirection] = React.useState(() => getPref("sortDirection", "asc"));
-  const changeSort = (key, toggle = false) => {
-    const direction = toggle && key === sortBy ? sortDirection === "asc" ? "desc" : "asc" : ["downloads", "stars", "installedVersion", "version"].includes(key) ? "desc" : "asc";
+  const changeSort = (key) => {
+    const direction = key === sortBy ? sortDirection === "asc" ? "desc" : "asc" : DESCENDING_FIRST.includes(key) ? "desc" : "asc";
     setSortBy(key);
     setSortDirection(direction);
     setPref("sortBy", key);
     setPref("sortDirection", direction);
   };
+  const changeGroup = (value) => {
+    setGroupBy(value);
+    setPref("groupBy", value);
+  };
+  const columns = React.useRef(null);
+  if (!columns.current) columns.current = platform.columns.createColumnManager("communitystore", COLUMN_WIDTHS, DEFAULT_HIDDEN_COLUMNS);
+  const manager = columns.current;
+  const [, redraw] = React.useReducer((x) => x + 1, 0);
+  const colRefs = React.useRef({});
+  const resized = React.useRef(false);
+  const visibleColumns = [COLUMNS[0], ...manager.order(DATA_COLUMN_KEYS).filter((k) => !manager.isHidden(k)).map((k) => COLUMNS.find((c) => c.key === k))];
+  const minWidth = visibleColumns.reduce((sum, c) => sum + (c.pinned ? PACKAGE_MIN_WIDTH : manager.width(c.key)), 0);
+  const columnMenu = (x, y) => {
+    const items = COLUMNS.filter((c) => !c.pinned).map((c) => {
+      const shown = !manager.isHidden(c.key);
+      return { label: `${shown ? "\u2713  " : "     "}${c.label}`, onClick: () => {
+        manager.setHidden(c.key, shown);
+        redraw();
+      } };
+    });
+    items.push("-", { label: "Restore Default", onClick: () => {
+      manager.reset();
+      redraw();
+    } });
+    platform.ui.contextMenu(x, y, items);
+  };
+  const moveColumn = (from, to) => {
+    if (!from || from === to || !DATA_COLUMN_KEYS.includes(from)) return;
+    const next = manager.order(DATA_COLUMN_KEYS).filter((k) => k !== from);
+    const index = DATA_COLUMN_KEYS.includes(to) ? next.indexOf(to) : 0;
+    next.splice(index, 0, from);
+    manager.setOrder(next);
+    redraw();
+  };
+  const startResize = (event, key) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX, col = colRefs.current[key], startWidth = manager.width(key);
+    document.body.style.cursor = "col-resize";
+    const move = (e) => {
+      if (col) col.style.width = Math.max(40, startWidth + e.clientX - startX) + "px";
+    };
+    const up = (e) => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      document.body.style.cursor = "";
+      resized.current = true;
+      setTimeout(() => {
+        resized.current = false;
+      });
+      manager.setWidth(key, startWidth + e.clientX - startX);
+      redraw();
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  };
   const [collapsed, setCollapsed] = React.useState({});
   const visible = (catalog.entries || []).filter((e) => e.installedVersion || e.stagedVersion || showsInWebUi(e));
-  const entries = visible.filter((e) => (tab === "installed" ? e.installedVersion || e.stagedVersion : tab === "updates" ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked) && (!typeFilter || e.type === typeFilter) && `${e.name} ${e.description} ${e.repo} ${(e.keywords || []).join(" ")}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => comparePackages(a, b, sortBy, sortDirection));
+  const query = search.trim().toLowerCase();
+  const entries = visible.filter((e) => (tab === "installed" ? e.installedVersion || e.stagedVersion : tab === "updates" ? e.updateAvailable && !e.stagedVersion && !e.revoked : !e.revoked) && (!typeFilter || e.type === typeFilter) && `${e.name} ${e.id} ${e.description} ${e.repo} ${TYPE_LABELS[e.type] || e.type} ${(e.authors || []).join(" ")} ${(e.keywords || []).join(" ")}`.toLowerCase().includes(query)).sort((a, b) => comparePackages(a, b, sortBy, sortDirection));
   const types = [...new Set(visible.map((e) => e.type))].sort((a, b) => typeRank(a) - typeRank(b));
   const groups = /* @__PURE__ */ new Map();
   for (const entry of entries) {
@@ -2671,13 +2770,45 @@ function CatalogView({ catalog, tab, selectedId, onSelect, actions }) {
   }
   const orderedGroups = [...groups].sort(([a], [b]) => groupBy === "type" ? typeRank(a) - typeRank(b) : groupBy === "status" ? STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b) : 0);
   const selected = visible.find((e) => e.id === selectedId);
-  return /* @__PURE__ */ React.createElement("div", { className: "cs-catalog" }, /* @__PURE__ */ React.createElement("div", { className: "cs-toolbar" }, /* @__PURE__ */ React.createElement("label", { className: "cs-search" }, /* @__PURE__ */ React.createElement("input", { className: "field", "aria-label": "Search packages", placeholder: "Search community packages\u2026", value: search, onChange: (e) => setSearch(e.target.value) })), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Package type", value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All package types"), types.map((type) => /* @__PURE__ */ React.createElement("option", { key: type, value: type }, TYPE_LABELS[type] || type))), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Group packages", value: groupBy, onChange: (e) => {
-    setGroupBy(e.target.value);
-    setPref("groupBy", e.target.value);
-  } }, /* @__PURE__ */ React.createElement("option", { value: "status" }, "Group by status"), /* @__PURE__ */ React.createElement("option", { value: "type" }, "Group by type"), /* @__PURE__ */ React.createElement("option", { value: "none" }, "No grouping")), /* @__PURE__ */ React.createElement("select", { className: "field", "aria-label": "Sort packages", value: sortBy, onChange: (e) => changeSort(e.target.value) }, SORT_COLUMNS.map(([key, label]) => /* @__PURE__ */ React.createElement("option", { key, value: key }, "Sort by ", label.toLowerCase()))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", "aria-label": "Reverse sort direction", onClick: () => changeSort(sortBy, true) }, sortDirection === "asc" ? "Ascending \u2191" : "Descending \u2193"), /* @__PURE__ */ React.createElement("span", { className: "cs-result-count", role: "status" }, entries.length, " package", entries.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement("div", { className: "cs-workspace", tabIndex: 0, "aria-label": "Package list" }, /* @__PURE__ */ React.createElement("table", { className: "cs-table" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, SORT_COLUMNS.map(([key, label]) => /* @__PURE__ */ React.createElement("th", { key, scope: "col", "aria-sort": sortBy === key ? sortDirection === "asc" ? "ascending" : "descending" : "none" }, /* @__PURE__ */ React.createElement("button", { className: "cs-sort-heading", onClick: () => changeSort(key, true), title: key === "downloads" ? DOWNLOAD_NOTE : `Sort by ${label.toLowerCase()}` }, label, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, sortBy === key ? sortDirection === "asc" ? " \u2191" : " \u2193" : " \u2195")))))), orderedGroups.map(([key, items]) => /* @__PURE__ */ React.createElement("tbody", { key }, groupBy !== "none" ? /* @__PURE__ */ React.createElement("tr", { className: "cs-group" }, /* @__PURE__ */ React.createElement("th", { colSpan: 7, scope: "rowgroup" }, /* @__PURE__ */ React.createElement("button", { "aria-expanded": !collapsed[groupBy + key], onClick: () => setCollapsed((old) => ({ ...old, [groupBy + key]: !old[groupBy + key] })) }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, collapsed[groupBy + key] ? "\u25B8" : "\u25BE"), " ", groupBy === "type" ? TYPE_LABELS[key] || key : key, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, items.length)))) : null, (groupBy === "none" || !collapsed[groupBy + key]) && items.map((entry) => /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: "cs-package-row", onClick: () => onSelect(entry.id) }, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("button", { className: "cs-package", "aria-haspopup": "dialog", onClick: (e) => {
-    e.stopPropagation();
-    onSelect(entry.id);
-  } }, /* @__PURE__ */ React.createElement(PackageIcon, { type: entry.type }), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("span", { className: "cs-name" }, entry.name), /* @__PURE__ */ React.createElement("span", { className: "cs-description" }, entry.description)))), /* @__PURE__ */ React.createElement("td", null, TYPE_LABELS[entry.type] || entry.type), /* @__PURE__ */ React.createElement("td", null, entry.installedVersion || "\u2014"), /* @__PURE__ */ React.createElement("td", null, entry.revoked ? "\u2014" : entry.version), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(DownloadCount, { entry })), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(StarCount, { entry })), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(PackageStatus, { entry }))))))), !entries.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty" }, search || typeFilter ? "No matches. Try another search or package type." : tab === "updates" ? "No updates available in the current catalog." : tab === "installed" ? "No store packages are installed on this engine." : "No packages available. Check your sources and sync status in Settings.") : null), selected ? /* @__PURE__ */ React.createElement(ConfirmOverlay, { documentation: true, closeLabel: "Close package details", inactive: !!actions.overlay, title: selected.name, onCancel: () => onSelect(null) }, /* @__PURE__ */ React.createElement(DetailView, { key: selected.id, entry: selected, actions })) : null);
+  return /* @__PURE__ */ React.createElement("div", { className: "cs-catalog" }, /* @__PURE__ */ React.createElement("div", { className: "cs-toolbar" }, /* @__PURE__ */ React.createElement("div", { className: "cs-search" }, /* @__PURE__ */ React.createElement("input", { "aria-label": "Search packages", placeholder: "Search name, author, repository or keyword\u2026", value: search, onChange: (e) => setSearch(e.target.value) }), search ? /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm btn-ghost cs-search-clear", "aria-label": "Clear search", onClick: () => setSearch("") }, "\u2715") : null), /* @__PURE__ */ React.createElement("select", { "aria-label": "Package type", value: typeFilter, onChange: (e) => setTypeFilter(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All package types"), types.map((type) => /* @__PURE__ */ React.createElement("option", { key: type, value: type }, TYPE_LABELS[type] || type))), /* @__PURE__ */ React.createElement("div", { className: "segpill", role: "group", "aria-label": "Group packages" }, [["status", "By status"], ["type", "By type"], ["none", "No grouping"]].map(([value, label]) => /* @__PURE__ */ React.createElement("button", { key: value, className: groupBy === value ? "on" : void 0, "aria-pressed": groupBy === value, onClick: () => changeGroup(value) }, label))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", "aria-haspopup": "menu", onClick: (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    columnMenu(r.left, r.bottom + 4);
+  } }, "Columns"), /* @__PURE__ */ React.createElement("span", { className: "cs-result-count", role: "status" }, entries.length, " package", entries.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement("div", { className: "panel cs-grid" }, /* @__PURE__ */ React.createElement("div", { className: "dt-wrap", tabIndex: 0, "aria-label": "Package list" }, /* @__PURE__ */ React.createElement("table", { className: "dt dt-resizable cs-table", style: { tableLayout: "fixed", width: "100%", minWidth: minWidth + "px" } }, /* @__PURE__ */ React.createElement("colgroup", null, visibleColumns.map((c) => /* @__PURE__ */ React.createElement("col", { key: c.key, ref: (el) => {
+    colRefs.current[c.key] = el;
+  }, style: c.pinned ? void 0 : { width: manager.width(c.key) + "px" } }))), /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { onContextMenu: (e) => {
+    e.preventDefault();
+    columnMenu(e.clientX, e.clientY);
+  } }, visibleColumns.map((c) => /* @__PURE__ */ React.createElement(
+    "th",
+    {
+      key: c.key,
+      scope: "col",
+      className: "sortable",
+      tabIndex: 0,
+      "aria-sort": sortBy === c.key ? sortDirection === "asc" ? "ascending" : "descending" : "none",
+      title: c.key === "downloads" ? DOWNLOAD_NOTE : `Sort by ${c.label.toLowerCase()}. Right-click to choose columns.`,
+      style: c.num ? { textAlign: "right" } : void 0,
+      draggable: !c.pinned,
+      onDragStart: (e) => e.dataTransfer.setData("text/plain", c.key),
+      onDragOver: (e) => e.preventDefault(),
+      onDrop: (e) => {
+        e.preventDefault();
+        moveColumn(e.dataTransfer.getData("text/plain"), c.key);
+      },
+      onClick: () => {
+        if (!resized.current) changeSort(c.key);
+      },
+      onKeyDown: (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          changeSort(c.key);
+        }
+      }
+    },
+    c.label,
+    sortBy === c.key ? /* @__PURE__ */ React.createElement("span", { className: "sort-arrow", "aria-hidden": "true" }, sortDirection === "asc" ? "\u25B2" : "\u25BC") : null,
+    !c.pinned ? /* @__PURE__ */ React.createElement("div", { className: "col-resize", onMouseDown: (e) => startResize(e, c.key), onClick: (e) => e.stopPropagation() }) : null
+  )))), orderedGroups.map(([key, items]) => /* @__PURE__ */ React.createElement("tbody", { key }, groupBy !== "none" ? /* @__PURE__ */ React.createElement("tr", { className: "group-row cs-group" }, /* @__PURE__ */ React.createElement("td", { colSpan: visibleColumns.length }, /* @__PURE__ */ React.createElement("button", { className: "cs-group-toggle", "aria-expanded": !collapsed[groupBy + key], onClick: () => setCollapsed((old) => ({ ...old, [groupBy + key]: !old[groupBy + key] })) }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, collapsed[groupBy + key] ? "\u25B8" : "\u25BE"), " ", groupBy === "type" ? TYPE_LABELS[key] || key : key, " ", /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, items.length)))) : null, (groupBy === "none" || !collapsed[groupBy + key]) && items.map((entry) => /* @__PURE__ */ React.createElement("tr", { key: entry.id, className: `cs-package-row${entry.id === selectedId ? " selected" : ""}`, onClick: () => onSelect(entry.id) }, visibleColumns.map((c) => /* @__PURE__ */ React.createElement("td", { key: c.key, "data-column": c.key, className: c.num ? "num" : c.mono ? "mono" : void 0 }, /* @__PURE__ */ React.createElement(PackageCell, { column: c, entry, onSelect })))))))), !entries.length ? /* @__PURE__ */ React.createElement("div", { className: "dt-empty" }, search || typeFilter ? "No matches. Try another search or package type." : tab === "updates" ? "No updates available in the current catalog." : tab === "installed" ? "No store packages are installed on this engine." : "No packages available. Check your sources and sync status in Settings.") : null)), selected ? /* @__PURE__ */ React.createElement(ConfirmOverlay, { documentation: true, closeLabel: "Close package details", inactive: !!actions.overlay, title: selected.name, onCancel: () => onSelect(null) }, /* @__PURE__ */ React.createElement(DetailView, { key: selected.id, entry: selected, actions })) : null);
 }
 function SettingsView({ catalog, onSaved }) {
   const [settings, setSettings] = React.useState(null);
@@ -2726,10 +2857,10 @@ function SettingsView({ catalog, onSaved }) {
     setNewValue("");
   };
   const describeSource = (s) => s.kind === "catalog" ? `catalog: ${s.url}` : s.kind === "org" ? `org: ${s.org} (topic: ${s.topic})` : `repo: ${s.repo}`;
-  return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3", style: { maxWidth: 760 } }, /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Sources"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "hint mb-2" }, "Bundled sources ship with the store and update with store releases. Custom sources are additive and stored on this engine."), /* @__PURE__ */ React.createElement("table", { className: "dt" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Source"), /* @__PURE__ */ React.createElement("th", null, "Origin"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, settings.bundledSources.map((s, i) => /* @__PURE__ */ React.createElement("tr", { key: `b${i}` }, /* @__PURE__ */ React.createElement("td", { className: "mono" }, describeSource(s)), /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "bundled"), /* @__PURE__ */ React.createElement("td", null))), settings.customSources.map((s, i) => /* @__PURE__ */ React.createElement("tr", { key: `c${i}` }, /* @__PURE__ */ React.createElement("td", { className: "mono" }, describeSource(s)), /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "custom"), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => setSettings({ ...settings, customSources: settings.customSources.filter((_, j) => j !== i) }) }, "Remove")))))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center mt-3" }, /* @__PURE__ */ React.createElement("select", { className: "field", style: { maxWidth: 110 }, value: newKind, onChange: (e) => setNewKind(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "repo" }, "repo"), /* @__PURE__ */ React.createElement("option", { value: "org" }, "org"), /* @__PURE__ */ React.createElement("option", { value: "catalog" }, "catalog")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3", style: { maxWidth: 760 } }, /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Sources"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "hint mb-2" }, "Bundled sources ship with the store and update with store releases. Custom sources are additive and stored on this engine."), /* @__PURE__ */ React.createElement("table", { className: "dt" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", null, "Source"), /* @__PURE__ */ React.createElement("th", null, "Origin"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, settings.bundledSources.map((s, i) => /* @__PURE__ */ React.createElement("tr", { key: `b${i}` }, /* @__PURE__ */ React.createElement("td", { className: "mono" }, describeSource(s)), /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "bundled"), /* @__PURE__ */ React.createElement("td", null))), settings.customSources.map((s, i) => /* @__PURE__ */ React.createElement("tr", { key: `c${i}` }, /* @__PURE__ */ React.createElement("td", { className: "mono" }, describeSource(s)), /* @__PURE__ */ React.createElement("td", { className: "text-text-dim" }, "custom"), /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => setSettings({ ...settings, customSources: settings.customSources.filter((_, j) => j !== i) }) }, "Remove")))))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center mt-3" }, /* @__PURE__ */ React.createElement("select", { "aria-label": "Source kind", style: { maxWidth: 110 }, value: newKind, onChange: (e) => setNewKind(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "repo" }, "repo"), /* @__PURE__ */ React.createElement("option", { value: "org" }, "org"), /* @__PURE__ */ React.createElement("option", { value: "catalog" }, "catalog")), /* @__PURE__ */ React.createElement(
     "input",
     {
-      className: "field",
+      "aria-label": "Source",
       style: { maxWidth: newKind === "catalog" ? 380 : 260 },
       value: newValue,
       onChange: (e) => setNewValue(e.target.value),
@@ -2738,13 +2869,13 @@ function SettingsView({ catalog, onSaved }) {
   ), newKind === "org" ? /* @__PURE__ */ React.createElement(
     "input",
     {
-      className: "field",
+      "aria-label": "Topic filter",
       style: { maxWidth: 160 },
       value: newTopic,
       onChange: (e) => setNewTopic(e.target.value),
       placeholder: "topic filter"
     }
-  ) : null, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: addSource }, "Add source")))), /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Blocklist"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "hint mb-2" }, "Blocked repositories never appear in the catalog. The bundled blocklist cannot be removed here."), settings.bundledBlocklist.map((b, i) => /* @__PURE__ */ React.createElement("div", { key: `bb${i}`, className: "flex gap-2 items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mono" }, b), /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "(bundled)"))), settings.localBlocklist.map((b, i) => /* @__PURE__ */ React.createElement("div", { key: `lb${i}`, className: "flex gap-2 items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mono" }, b), /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => setSettings({ ...settings, localBlocklist: settings.localBlocklist.filter((_, j) => j !== i) }) }, "Remove"))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center mt-2" }, /* @__PURE__ */ React.createElement("input", { className: "field", style: { maxWidth: 260 }, value: newBlock, onChange: (e) => setNewBlock(e.target.value), placeholder: "owner/repository" }), /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => {
+  ) : null, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: addSource }, "Add source")))), /* @__PURE__ */ React.createElement("div", { className: "panel" }, /* @__PURE__ */ React.createElement("div", { className: "panel-header" }, "Blocklist"), /* @__PURE__ */ React.createElement("div", { className: "panel-body" }, /* @__PURE__ */ React.createElement("div", { className: "hint mb-2" }, "Blocked repositories never appear in the catalog. The bundled blocklist cannot be removed here."), settings.bundledBlocklist.map((b, i) => /* @__PURE__ */ React.createElement("div", { key: `bb${i}`, className: "flex gap-2 items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mono" }, b), /* @__PURE__ */ React.createElement("span", { className: "text-text-dim" }, "(bundled)"))), settings.localBlocklist.map((b, i) => /* @__PURE__ */ React.createElement("div", { key: `lb${i}`, className: "flex gap-2 items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mono" }, b), /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => setSettings({ ...settings, localBlocklist: settings.localBlocklist.filter((_, j) => j !== i) }) }, "Remove"))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center mt-2" }, /* @__PURE__ */ React.createElement("input", { "aria-label": "Repository to block", style: { maxWidth: 260 }, value: newBlock, onChange: (e) => setNewBlock(e.target.value), placeholder: "owner/repository" }), /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => {
     const value = newBlock.trim().toLowerCase();
     if (value) setSettings({ ...settings, localBlocklist: [...settings.localBlocklist, value] });
     setNewBlock("");
@@ -2758,7 +2889,7 @@ function SettingsView({ catalog, onSaved }) {
   ), "Include pre-releases (beta channel)"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 items-center" }, /* @__PURE__ */ React.createElement(
     "input",
     {
-      className: "field",
+      "aria-label": "GitHub personal access token",
       type: "password",
       style: { maxWidth: 340 },
       placeholder: settings.tokenSet ? "Token configured (leave blank to keep, save empty to clear)" : "Personal access token (optional)",
@@ -2808,7 +2939,7 @@ function CommunityStoreView() {
     installed: visible.filter((e) => e.installedVersion || e.stagedVersion).length,
     updates: visible.filter((e) => e.updateAvailable && !e.stagedVersion && !e.revoked).length
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "view cs-store flex flex-col flex-1 min-h-0" }, /* @__PURE__ */ React.createElement("style", null, STORE_CSS), actions.overlay, /* @__PURE__ */ React.createElement("div", { className: "cs-header" }, /* @__PURE__ */ React.createElement("header", { className: "cs-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", null, "Community Store"), /* @__PURE__ */ React.createElement("p", null, "Extend your engine. Make it your own.")), /* @__PURE__ */ React.createElement("div", { className: "cs-sync" }, /* @__PURE__ */ React.createElement("button", { className: "btn", onClick: () => refresh(true), disabled: loading || actions.busy }, loading ? "Syncing\u2026" : "\u21BB Sync sources"), /* @__PURE__ */ React.createElement("div", null, catalog ? `Engine ${catalog.engineVersion} \xB7 Synced ${new Date(catalog.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Connecting to engine"))), /* @__PURE__ */ React.createElement("nav", { className: "cs-tabs", "aria-label": "Community Store views" }, [["browse", "Discover"], ["installed", "Installed"], ["updates", "Updates"], ...canEditSettings() ? [["settings", "Settings"]] : []].map(([id, label]) => /* @__PURE__ */ React.createElement("button", { key: id, className: `cs-tab ${tab === id ? "active" : ""}`, "aria-current": tab === id ? "page" : void 0, onClick: () => setTab(id) }, label, id !== "settings" && data ? /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, counts[id]) : null)))), /* @__PURE__ */ React.createElement("div", { className: "view-body cs-body" }, error ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice error", role: "alert" }, "Could not load the catalog: ", error, " ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => refresh(true), disabled: loading }, "Retry")) : null, data?.errors?.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice warn", role: "status" }, /* @__PURE__ */ React.createElement("strong", null, "Some sources could not sync."), " Results may be incomplete.", data.errors.map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i }, e.source, ": ", e.message))) : null, completion ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice", role: "status" }, completion.restartRequired ? `${completion.entry.name} ${completion.entry.version} is staged. Restart the engine to activate it.` : completion.mode === "remove" ? `${completion.entry.name} was removed.` : `${completion.entry.name} was imported${completion.mode === "copy" ? " as a copy" : ""}. It is available now.`, " ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => setCompletion(null), "aria-label": "Dismiss result" }, "Dismiss")) : null, tab === "settings" && canEditSettings() ? /* @__PURE__ */ React.createElement("div", { className: "cs-settings-scroll" }, /* @__PURE__ */ React.createElement(SettingsView, { catalog, onSaved: () => refresh(true) })) : data ? /* @__PURE__ */ React.createElement(CatalogView, { catalog: data, tab, selectedId, onSelect: setSelectedId, actions }) : loading ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty", role: "status" }, "Loading community packages\u2026") : null));
+  return /* @__PURE__ */ React.createElement("div", { className: "view cs-store flex flex-col flex-1 min-h-0" }, /* @__PURE__ */ React.createElement("style", null, STORE_CSS), actions.overlay, /* @__PURE__ */ React.createElement("div", { className: "cs-header" }, /* @__PURE__ */ React.createElement("nav", { className: "tabs cs-tabs", "aria-label": "Community Store views" }, [["browse", "Discover"], ["installed", "Installed"], ["updates", "Updates"], ...canEditSettings() ? [["settings", "Settings"]] : []].map(([id, label]) => /* @__PURE__ */ React.createElement("button", { key: id, className: `tab ${tab === id ? "active" : ""}`, "aria-current": tab === id ? "page" : void 0, onClick: () => setTab(id) }, label, id !== "settings" && data ? /* @__PURE__ */ React.createElement("span", { className: "cs-count" }, counts[id]) : null))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => refresh(true), disabled: loading || actions.busy }, loading ? "Syncing\u2026" : "\u21BB Sync sources"), /* @__PURE__ */ React.createElement("span", { className: "cs-sync" }, catalog ? `Engine ${catalog.engineVersion} \xB7 Synced ${new Date(catalog.generatedAt).toLocaleString()}` : "Connecting to engine")), /* @__PURE__ */ React.createElement("div", { className: "view-body cs-body" }, error ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice error", role: "alert" }, "Could not load the catalog: ", error, " ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => refresh(true), disabled: loading }, "Retry")) : null, data?.errors?.length ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice warn", role: "status" }, /* @__PURE__ */ React.createElement("strong", null, "Some sources could not sync."), " Results may be incomplete.", data.errors.map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i }, e.source, ": ", e.message))) : null, completion ? /* @__PURE__ */ React.createElement("div", { className: "cs-notice", role: "status" }, completion.restartRequired ? `${completion.entry.name} ${completion.entry.version} is staged. Restart the engine to activate it.` : completion.mode === "remove" ? `${completion.entry.name} was removed.` : `${completion.entry.name} was imported${completion.mode === "copy" ? " as a copy" : ""}. It is available now.`, " ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-sm", onClick: () => setCompletion(null), "aria-label": "Dismiss result" }, "Dismiss")) : null, tab === "settings" && canEditSettings() ? /* @__PURE__ */ React.createElement("div", { className: "cs-settings-scroll" }, /* @__PURE__ */ React.createElement(SettingsView, { catalog, onSaved: () => refresh(true) })) : data ? /* @__PURE__ */ React.createElement(CatalogView, { catalog: data, tab, selectedId, onSelect: setSelectedId, actions }) : loading ? /* @__PURE__ */ React.createElement("div", { className: "cs-empty", role: "status" }, "Loading community packages\u2026") : null));
 }
 function register() {
   platform.registerNavItem({
